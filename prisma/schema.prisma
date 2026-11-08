@@ -1,0 +1,1290 @@
+// LibCon — schema database. Sumber: docs/ERD.md (44 tabel, 7 domain, 29 enum).
+//
+// Konvensi:
+// - Model PascalCase, di-@@map ke nama tabel snake_case asli ERD.
+// - Kolom created_by/updated_by/deleted_by adalah UUID polos TANPA relasi Prisma
+//   (lihat CLAUDE.md "Keputusan desain schema") — FK sesungguhnya ke users.id
+//   ditambahkan lewat migrasi SQL di Tahap 3, supaya model User tidak punya
+//   ratusan field balik. FK aktor yang bermakna bisnis (verified_by, requested_by,
+//   published_by, dll.) tetap dimodelkan sebagai relasi Prisma penuh.
+// - Constraint yang tidak bisa diekspresikan di Prisma schema (partial unique index,
+//   CHECK constraint, trigger) ditandai `// TODO(migrasi-sql):` dan dikerjakan di Tahap 3.
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+// =========================================================================
+// 09 Enum (29 dari ERD + 2 enum inline yang tidak dikatalogkan ERD §09:
+// ImportJobType, ReminderKind — dipakai di import_jobs.type & reminder_schedules.kind)
+// =========================================================================
+
+enum UserRole {
+  SUPER_ADMIN
+  ADMIN
+  PARTICIPANT
+  SYSTEM
+}
+
+enum AuditAction {
+  INSERT
+  UPDATE
+  DELETE
+  SOFT_DELETE
+  RESTORE
+}
+
+enum LogSource {
+  WEB
+  CRON
+  IMPORT
+  SYSTEM
+}
+
+enum ActivityType {
+  LOGIN
+  LOGOUT
+  LOGIN_FAILED
+  ACCOUNT_LOCKED
+  PASSWORD_CHANGED
+  VIEW_SUBMISSION
+  EXPORT_REPORT
+  DOWNLOAD_RAPOR
+  RESEND_ACTIVATION
+  SEND_BULK_REMINDER
+  PUBLISH_SCORES
+  RUN_SCORING
+  IMPERSONATE_VIEW // belum diimplementasi Fase 1 — lihat CLAUDE.md "Keputusan yang sudah diambil"
+}
+
+enum UserStatus {
+  PENDING_ACTIVATION
+  ACTIVE
+  DISABLED
+}
+
+enum TokenType {
+  ACTIVATION
+  PASSWORD_RESET
+}
+
+enum RequestStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum RegionLevel {
+  CITY
+  DISTRICT
+  VILLAGE
+}
+
+enum PeriodStatus {
+  DRAFT
+  OPEN
+  CLOSED
+  ARCHIVED
+}
+
+enum RevisionScope {
+  SELECTED_QUESTIONS
+  ALL
+}
+
+enum QuestionnaireStatus {
+  DRAFT
+  PUBLISHED
+}
+
+enum QuestionType {
+  INTEGER
+  DECIMAL
+  CURRENCY
+  PERCENT
+  SHORT_TEXT
+  LONG_TEXT
+  SINGLE_CHOICE
+  MULTI_CHOICE
+  YES_NO
+  DROPDOWN
+  DATE
+  SCALE
+  URL
+  TABLE
+  FILE
+}
+
+enum ConditionOperator {
+  EQ
+  NEQ
+  GT
+  GTE
+  LT
+  LTE
+  IN
+  NOT_EMPTY
+}
+
+enum ConditionEffect {
+  SHOW
+  REQUIRE
+}
+
+enum RuleType {
+  REQUIRED
+  RANGE
+  COMPARE
+  FORMAT
+  YOY_CHANGE
+  EXPRESSION
+}
+
+enum RuleSeverity {
+  BLOCK
+  FLAG
+}
+
+enum SubmissionStatus {
+  NOT_STARTED
+  DRAFT
+  SUBMITTED
+  NEEDS_REVISION
+  VERIFIED
+  NOT_SUBMITTED
+}
+
+enum ValidationResultStatus {
+  OPEN
+  ACCEPTED_BY_ADMIN
+  RESOLVED
+}
+
+enum RevisionStatus {
+  OPEN
+  RESUBMITTED
+  EXPIRED
+  CANCELLED
+}
+
+enum SchemeStatus {
+  DRAFT
+  ACTIVE
+  ARCHIVED
+}
+
+enum NodeLevel {
+  INDICATOR
+  SUBDIMENSION
+  DIMENSION
+  INDEX
+}
+
+enum NormalizationType {
+  NONE
+  TARGET_RATIO
+  MIN_MAX
+  THRESHOLD_TABLE
+  OPTION_SCORE
+}
+
+enum AggregationType {
+  WEIGHTED_SUM
+  AVERAGE
+  FORMULA
+}
+
+enum RunMode {
+  TEST
+  OFFICIAL
+}
+
+enum RunStatus {
+  RUNNING
+  DONE
+  FAILED
+}
+
+enum EmailTemplateKey {
+  ACTIVATION
+  PASSWORD_RESET
+  ACCOUNT_LOCKED
+  REMINDER_DEADLINE
+  REMINDER_ACTIVATION
+  REMINDER_REVISION
+  SUBMISSION_RECEIPT
+  REVISION_OPENED
+  ACCOUNT_REQUEST_APPROVED
+  ACCOUNT_REQUEST_REJECTED
+  SCORE_PUBLISHED
+}
+
+enum EmailStatus {
+  QUEUED
+  SENT
+  FAILED
+  OPENED
+  BOUNCED
+}
+
+enum ImportStatus {
+  UPLOADED
+  VALIDATED
+  COMMITTED
+  FAILED
+}
+
+enum ImportRowStatus {
+  VALID
+  ERROR
+  IMPORTED
+  SKIPPED
+}
+
+enum ImportJobType {
+  INSTITUTIONS
+}
+
+enum ReminderKind {
+  DEADLINE
+  ACTIVATION
+  REVISION
+}
+
+// =========================================================================
+// 02 Master data & lembaga
+// =========================================================================
+
+model Region {
+  id        String      @id @default(uuid()) @db.Uuid
+  parentId  String?     @map("parent_id") @db.Uuid
+  level     RegionLevel
+  code      String      @unique
+  name      String
+  isActive  Boolean     @default(true) @map("is_active")
+  createdAt DateTime    @default(now()) @map("created_at")
+  createdBy String      @map("created_by") @db.Uuid
+  updatedAt DateTime    @updatedAt @map("updated_at")
+  updatedBy String?     @map("updated_by") @db.Uuid
+  deletedAt DateTime?   @map("deleted_at")
+  deletedBy String?     @map("deleted_by") @db.Uuid
+
+  parent       Region?       @relation("RegionParent", fields: [parentId], references: [id])
+  children     Region[]      @relation("RegionParent")
+  institutions Institution[]
+
+  @@index([parentId])
+  @@map("regions")
+}
+
+model InstitutionType {
+  id          String    @id @default(uuid()) @db.Uuid
+  code        String    @unique
+  name        String
+  description String?
+  sortOrder   Int       @default(0) @map("sort_order")
+  isActive    Boolean   @default(true) @map("is_active")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  createdBy   String    @map("created_by") @db.Uuid
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+  updatedBy   String?   @map("updated_by") @db.Uuid
+  deletedAt   DateTime? @map("deleted_at")
+  deletedBy   String?   @map("deleted_by") @db.Uuid
+
+  institutions             Institution[]
+  questionInstitutionTypes QuestionInstitutionType[]
+  scoreNodeTypeOverrides   ScoreNodeTypeOverride[]
+
+  @@map("institution_types")
+}
+
+model Institution {
+  id              String    @id @default(uuid()) @db.Uuid
+  npp             String    @unique
+  npsn            String?
+  libraryName     String    @map("library_name")
+  institutionName String    @map("institution_name")
+  typeId          String    @map("type_id") @db.Uuid
+  regionId        String    @map("region_id") @db.Uuid
+  address         String
+  officialEmail   String    @map("official_email")
+  whatsapp        String?
+  headName        String?   @map("head_name")
+  picName         String    @map("pic_name")
+  isActive        Boolean   @default(true) @map("is_active")
+  createdAt       DateTime  @default(now()) @map("created_at")
+  createdBy       String    @map("created_by") @db.Uuid
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+  updatedBy       String?   @map("updated_by") @db.Uuid
+  deletedAt       DateTime? @map("deleted_at")
+  deletedBy       String?   @map("deleted_by") @db.Uuid
+
+  type             InstitutionType            @relation(fields: [typeId], references: [id])
+  region           Region                     @relation(fields: [regionId], references: [id])
+  users            User[]
+  changeRequests   InstitutionChangeRequest[]
+  accountRequests  AccountRequest[]
+  submissions      Submission[]
+  periodExtensions PeriodExtension[]
+  emailLogs        EmailLog[]
+  importJobRows    ImportJobRow[]
+
+  @@index([regionId, typeId])
+  @@map("institutions")
+}
+
+model InstitutionChangeRequest {
+  id            String        @id @default(uuid()) @db.Uuid
+  institutionId String        @map("institution_id") @db.Uuid
+  requestedById String        @map("requested_by") @db.Uuid
+  changes       Json
+  reason        String
+  status        RequestStatus @default(PENDING)
+  reviewedById  String?       @map("reviewed_by") @db.Uuid
+  reviewedAt    DateTime?     @map("reviewed_at")
+  reviewNote    String?       @map("review_note")
+  createdAt     DateTime      @default(now()) @map("created_at")
+  createdBy     String        @map("created_by") @db.Uuid
+  updatedAt     DateTime      @updatedAt @map("updated_at")
+  updatedBy     String?       @map("updated_by") @db.Uuid
+
+  institution Institution @relation(fields: [institutionId], references: [id])
+  requestedBy User        @relation("InstitutionChangeRequestedBy", fields: [requestedById], references: [id])
+  reviewedBy  User?       @relation("InstitutionChangeReviewedBy", fields: [reviewedById], references: [id])
+
+  @@map("institution_change_requests")
+}
+
+// =========================================================================
+// 03 Akun & autentikasi
+// =========================================================================
+
+model User {
+  id                String     @id @default(uuid()) @db.Uuid
+  role              UserRole
+  institutionId     String?    @map("institution_id") @db.Uuid
+  username          String     @unique
+  email             String     @unique
+  fullName          String     @map("full_name")
+  passwordHash      String?    @map("password_hash")
+  status            UserStatus @default(PENDING_ACTIVATION)
+  isPrimary         Boolean    @default(false) @map("is_primary")
+  failedLoginCount  Int        @default(0) @map("failed_login_count")
+  lockedUntil       DateTime?  @map("locked_until")
+  activatedAt       DateTime?  @map("activated_at")
+  lastLoginAt       DateTime?  @map("last_login_at")
+  passwordChangedAt DateTime?  @map("password_changed_at")
+  createdAt         DateTime   @default(now()) @map("created_at")
+  createdBy         String     @map("created_by") @db.Uuid
+  updatedAt         DateTime   @updatedAt @map("updated_at")
+  updatedBy         String?    @map("updated_by") @db.Uuid
+  deletedAt         DateTime?  @map("deleted_at")
+  deletedBy         String?    @map("deleted_by") @db.Uuid
+
+  institution Institution? @relation(fields: [institutionId], references: [id])
+
+  authTokens    AuthToken[]
+  sessions      Session[]
+  loginAttempts LoginAttempt[]
+
+  // relasi aktor bisnis (bukan kolom tracking generik — lihat header file)
+  institutionChangeRequestsRequested InstitutionChangeRequest[] @relation("InstitutionChangeRequestedBy")
+  institutionChangeRequestsReviewed  InstitutionChangeRequest[] @relation("InstitutionChangeReviewedBy")
+  accountRequestsRequested           AccountRequest[]           @relation("AccountRequestRequestedBy")
+  accountRequestsReviewed            AccountRequest[]           @relation("AccountRequestReviewedBy")
+  accountRequestCreatedFor           AccountRequest?            @relation("AccountRequestCreatedUser")
+  savedReportFilters                 SavedReportFilter[]
+  submissionsLastSubmitted           Submission[]               @relation("SubmissionLastSubmittedBy")
+  submissionsVerified                Submission[]               @relation("SubmissionVerifiedBy")
+  answersUpdated                     Answer[]
+  submissionSnapshotsSubmitted       SubmissionSnapshot[]
+  validationResultsReviewed          ValidationResult[]
+  revisionRequestsRequested          RevisionRequest[]
+  evidenceFilesUploaded              EvidenceFile[]
+  questionnairesPublished            Questionnaire[]
+  surveyPeriodsScoresPublished       SurveyPeriod[]             @relation("SurveyPeriodScoresPublishedBy")
+  surveyPeriodsScoresUnpublished     SurveyPeriod[]             @relation("SurveyPeriodScoresUnpublishedBy")
+  scoreRunsTriggered                 ScoreRun[]
+  emailLogsReceived                  EmailLog[]
+
+  @@map("users")
+}
+
+model AuthToken {
+  id        String    @id @default(uuid()) @db.Uuid
+  userId    String    @map("user_id") @db.Uuid
+  type      TokenType
+  tokenHash String    @unique @map("token_hash")
+  expiresAt DateTime  @map("expires_at")
+  usedAt    DateTime? @map("used_at")
+  revokedAt DateTime? @map("revoked_at")
+  createdAt DateTime  @default(now()) @map("created_at")
+  createdBy String    @map("created_by") @db.Uuid
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  updatedBy String?   @map("updated_by") @db.Uuid
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@index([userId, type])
+  // TODO(migrasi-sql): partial index (user_id, type) WHERE used_at IS NULL
+  @@map("auth_tokens")
+}
+
+model Session {
+  id               String   @id @default(uuid()) @db.Uuid
+  userId           String   @map("user_id") @db.Uuid
+  sessionTokenHash String   @unique @map("session_token_hash")
+  expiresAt        DateTime @map("expires_at")
+  ipAddress        String?  @map("ip_address")
+  userAgent        String?  @map("user_agent")
+  createdAt        DateTime @default(now()) @map("created_at")
+  createdBy        String   @map("created_by") @db.Uuid
+  updatedAt        DateTime @updatedAt @map("updated_at")
+  updatedBy        String?  @map("updated_by") @db.Uuid
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+  @@map("sessions")
+}
+
+model LoginAttempt {
+  id            BigInt   @id @default(autoincrement())
+  usernameInput String   @map("username_input")
+  userId        String?  @map("user_id") @db.Uuid
+  success       Boolean
+  ipAddress     String?  @map("ip_address")
+  userAgent     String?  @map("user_agent")
+  createdAt     DateTime @default(now()) @map("created_at")
+  createdBy     String   @map("created_by") @db.Uuid
+
+  user User? @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+  @@map("login_attempts")
+}
+
+model AccountRequest {
+  id            String        @id @default(uuid()) @db.Uuid
+  institutionId String        @map("institution_id") @db.Uuid
+  requestedById String        @map("requested_by") @db.Uuid
+  fullName      String        @map("full_name")
+  email         String
+  reason        String
+  status        RequestStatus @default(PENDING)
+  reviewedById  String?       @map("reviewed_by") @db.Uuid
+  reviewedAt    DateTime?     @map("reviewed_at")
+  rejectReason  String?       @map("reject_reason")
+  createdUserId String?       @unique @map("created_user_id") @db.Uuid
+  createdAt     DateTime      @default(now()) @map("created_at")
+  createdBy     String        @map("created_by") @db.Uuid
+  updatedAt     DateTime      @updatedAt @map("updated_at")
+  updatedBy     String?       @map("updated_by") @db.Uuid
+
+  institution Institution @relation(fields: [institutionId], references: [id])
+  requestedBy User        @relation("AccountRequestRequestedBy", fields: [requestedById], references: [id])
+  reviewedBy  User?       @relation("AccountRequestReviewedBy", fields: [reviewedById], references: [id])
+  createdUser User?       @relation("AccountRequestCreatedUser", fields: [createdUserId], references: [id])
+
+  @@map("account_requests")
+}
+
+// =========================================================================
+// 04 Periode & kuesioner
+// =========================================================================
+
+model SurveyPeriod {
+  id                        String        @id @default(uuid()) @db.Uuid
+  name                      String
+  year                      Int
+  opensAt                   DateTime      @map("opens_at")
+  closesAt                  DateTime      @map("closes_at")
+  status                    PeriodStatus  @default(DRAFT)
+  copiedFromId              String?       @map("copied_from_id") @db.Uuid
+  revisionDeadlineDays      Int           @default(7) @map("revision_deadline_days")
+  revisionScope             RevisionScope @default(SELECTED_QUESTIONS) @map("revision_scope")
+  showRankingToParticipants Boolean       @default(false) @map("show_ranking_to_participants")
+  scoresPublishedAt         DateTime?     @map("scores_published_at")
+  scoresPublishedById       String?       @map("scores_published_by") @db.Uuid
+  scoresUnpublishedAt       DateTime?     @map("scores_unpublished_at")
+  scoresUnpublishedById     String?       @map("scores_unpublished_by") @db.Uuid
+  scoresUnpublishReason     String?       @map("scores_unpublish_reason")
+  createdAt                 DateTime      @default(now()) @map("created_at")
+  createdBy                 String        @map("created_by") @db.Uuid
+  updatedAt                 DateTime      @updatedAt @map("updated_at")
+  updatedBy                 String?       @map("updated_by") @db.Uuid
+  deletedAt                 DateTime?     @map("deleted_at")
+  deletedBy                 String?       @map("deleted_by") @db.Uuid
+
+  copiedFrom          SurveyPeriod?  @relation("SurveyPeriodCopy", fields: [copiedFromId], references: [id])
+  copies              SurveyPeriod[] @relation("SurveyPeriodCopy")
+  scoresPublishedBy   User?          @relation("SurveyPeriodScoresPublishedBy", fields: [scoresPublishedById], references: [id])
+  scoresUnpublishedBy User?          @relation("SurveyPeriodScoresUnpublishedBy", fields: [scoresUnpublishedById], references: [id])
+
+  periodExtensions  PeriodExtension[]
+  questionnaire     Questionnaire?
+  scoringSchemes    ScoringScheme[]
+  submissions       Submission[]
+  reminderSchedules ReminderSchedule[]
+
+  @@map("survey_periods")
+}
+
+model PeriodExtension {
+  id            String    @id @default(uuid()) @db.Uuid
+  periodId      String    @map("period_id") @db.Uuid
+  institutionId String?   @map("institution_id") @db.Uuid
+  newClosesAt   DateTime  @map("new_closes_at")
+  reason        String
+  createdAt     DateTime  @default(now()) @map("created_at")
+  createdBy     String    @map("created_by") @db.Uuid
+  updatedAt     DateTime  @updatedAt @map("updated_at")
+  updatedBy     String?   @map("updated_by") @db.Uuid
+  deletedAt     DateTime? @map("deleted_at")
+  deletedBy     String?   @map("deleted_by") @db.Uuid
+
+  period      SurveyPeriod @relation(fields: [periodId], references: [id])
+  institution Institution? @relation(fields: [institutionId], references: [id])
+
+  @@map("period_extensions")
+}
+
+model Questionnaire {
+  id            String              @id @default(uuid()) @db.Uuid
+  periodId      String              @unique @map("period_id") @db.Uuid
+  title         String
+  instructions  String?
+  status        QuestionnaireStatus @default(DRAFT)
+  version       Int                 @default(1)
+  publishedAt   DateTime?           @map("published_at")
+  publishedById String?             @map("published_by") @db.Uuid
+  createdAt     DateTime            @default(now()) @map("created_at")
+  createdBy     String              @map("created_by") @db.Uuid
+  updatedAt     DateTime            @updatedAt @map("updated_at")
+  updatedBy     String?             @map("updated_by") @db.Uuid
+  deletedAt     DateTime?           @map("deleted_at")
+  deletedBy     String?             @map("deleted_by") @db.Uuid
+
+  period      SurveyPeriod @relation(fields: [periodId], references: [id])
+  publishedBy User?        @relation(fields: [publishedById], references: [id])
+  sections    Section[]
+  questions   Question[]
+
+  @@map("questionnaires")
+}
+
+model Section {
+  id               String    @id @default(uuid()) @db.Uuid
+  questionnaireId  String    @map("questionnaire_id") @db.Uuid
+  code             String
+  title            String
+  description      String?
+  evidenceLabel    String?   @map("evidence_label")
+  evidenceRequired Boolean   @default(false) @map("evidence_required")
+  sortOrder        Int       @default(0) @map("sort_order")
+  createdAt        DateTime  @default(now()) @map("created_at")
+  createdBy        String    @map("created_by") @db.Uuid
+  updatedAt        DateTime  @updatedAt @map("updated_at")
+  updatedBy        String?   @map("updated_by") @db.Uuid
+  deletedAt        DateTime? @map("deleted_at")
+  deletedBy        String?   @map("deleted_by") @db.Uuid
+
+  questionnaire Questionnaire @relation(fields: [questionnaireId], references: [id])
+  questions     Question[]
+
+  @@map("sections")
+}
+
+model Question {
+  id              String       @id @default(uuid()) @db.Uuid
+  questionnaireId String       @map("questionnaire_id") @db.Uuid
+  sectionId       String       @map("section_id") @db.Uuid
+  code            String
+  label           String
+  helpText        String?      @map("help_text")
+  type            QuestionType
+  isRequired      Boolean      @default(false) @map("is_required")
+  config          Json?
+  hasEvidenceUrl  Boolean      @default(false) @map("has_evidence_url")
+  sortOrder       Int          @default(0) @map("sort_order")
+  isActive        Boolean      @default(true) @map("is_active")
+  copiedFromId    String?      @map("copied_from_id") @db.Uuid
+  createdAt       DateTime     @default(now()) @map("created_at")
+  createdBy       String       @map("created_by") @db.Uuid
+  updatedAt       DateTime     @updatedAt @map("updated_at")
+  updatedBy       String?      @map("updated_by") @db.Uuid
+  deletedAt       DateTime?    @map("deleted_at")
+  deletedBy       String?      @map("deleted_by") @db.Uuid
+
+  questionnaire Questionnaire @relation(fields: [questionnaireId], references: [id])
+  section       Section       @relation(fields: [sectionId], references: [id])
+  copiedFrom    Question?     @relation("QuestionCopy", fields: [copiedFromId], references: [id])
+  copies        Question[]    @relation("QuestionCopy")
+
+  options                QuestionOption[]
+  institutionTypes       QuestionInstitutionType[]
+  conditionsAsTarget     QuestionCondition[]       @relation("QuestionConditionTarget")
+  conditionsAsDependency QuestionCondition[]       @relation("QuestionConditionDependency")
+  validationRules        ValidationRule[]
+  answers                Answer[]
+  validationResults      ValidationResult[]
+  revisionRequestItems   RevisionRequestItem[]
+  scoreNodeVariables     ScoreNodeVariable[]
+  evidenceFiles          EvidenceFile[]
+
+  @@unique([questionnaireId, code])
+  @@map("questions")
+}
+
+model QuestionOption {
+  id         String    @id @default(uuid()) @db.Uuid
+  questionId String    @map("question_id") @db.Uuid
+  label      String
+  value      String
+  scoreValue Decimal?  @map("score_value") @db.Decimal(10, 4)
+  sortOrder  Int       @default(0) @map("sort_order")
+  createdAt  DateTime  @default(now()) @map("created_at")
+  createdBy  String    @map("created_by") @db.Uuid
+  updatedAt  DateTime  @updatedAt @map("updated_at")
+  updatedBy  String?   @map("updated_by") @db.Uuid
+  deletedAt  DateTime? @map("deleted_at")
+  deletedBy  String?   @map("deleted_by") @db.Uuid
+
+  question Question @relation(fields: [questionId], references: [id])
+
+  @@map("question_options")
+}
+
+model QuestionInstitutionType {
+  questionId        String   @map("question_id") @db.Uuid
+  institutionTypeId String   @map("institution_type_id") @db.Uuid
+  createdAt         DateTime @default(now()) @map("created_at")
+  createdBy         String   @map("created_by") @db.Uuid
+
+  question        Question        @relation(fields: [questionId], references: [id])
+  institutionType InstitutionType @relation(fields: [institutionTypeId], references: [id])
+
+  @@id([questionId, institutionTypeId])
+  @@map("question_institution_types")
+}
+
+model QuestionCondition {
+  id                  String            @id @default(uuid()) @db.Uuid
+  questionId          String            @map("question_id") @db.Uuid
+  dependsOnQuestionId String            @map("depends_on_question_id") @db.Uuid
+  operator            ConditionOperator
+  value               Json
+  effect              ConditionEffect
+  createdAt           DateTime          @default(now()) @map("created_at")
+  createdBy           String            @map("created_by") @db.Uuid
+  updatedAt           DateTime          @updatedAt @map("updated_at")
+  updatedBy           String?           @map("updated_by") @db.Uuid
+  deletedAt           DateTime?         @map("deleted_at")
+  deletedBy           String?           @map("deleted_by") @db.Uuid
+
+  question          Question @relation("QuestionConditionTarget", fields: [questionId], references: [id])
+  dependsOnQuestion Question @relation("QuestionConditionDependency", fields: [dependsOnQuestionId], references: [id])
+
+  @@map("question_conditions")
+}
+
+model ValidationRule {
+  id         String       @id @default(uuid()) @db.Uuid
+  questionId String       @map("question_id") @db.Uuid
+  ruleType   RuleType     @map("rule_type")
+  params     Json
+  severity   RuleSeverity
+  message    String
+  isActive   Boolean      @default(true) @map("is_active")
+  sortOrder  Int          @default(0) @map("sort_order")
+  createdAt  DateTime     @default(now()) @map("created_at")
+  createdBy  String       @map("created_by") @db.Uuid
+  updatedAt  DateTime     @updatedAt @map("updated_at")
+  updatedBy  String?      @map("updated_by") @db.Uuid
+  deletedAt  DateTime?    @map("deleted_at")
+  deletedBy  String?      @map("deleted_by") @db.Uuid
+
+  question          Question           @relation(fields: [questionId], references: [id])
+  validationResults ValidationResult[]
+
+  @@map("validation_rules")
+}
+
+// =========================================================================
+// 05 Pengisian, validasi & revisi
+// =========================================================================
+
+model Submission {
+  id                String           @id @default(uuid()) @db.Uuid
+  periodId          String           @map("period_id") @db.Uuid
+  institutionId     String           @map("institution_id") @db.Uuid
+  status            SubmissionStatus @default(NOT_STARTED)
+  progressPct       Decimal          @default(0) @map("progress_pct") @db.Decimal(5, 2)
+  revisionRound     Int              @default(0) @map("revision_round")
+  openFlagCount     Int              @default(0) @map("open_flag_count")
+  submitterName     String?          @map("submitter_name")
+  firstSubmittedAt  DateTime?        @map("first_submitted_at")
+  lastSubmittedAt   DateTime?        @map("last_submitted_at")
+  lastSubmittedById String?          @map("last_submitted_by") @db.Uuid
+  lastSavedAt       DateTime?        @map("last_saved_at")
+  verifiedAt        DateTime?        @map("verified_at")
+  verifiedById      String?          @map("verified_by") @db.Uuid
+  adminNote         String?          @map("admin_note")
+  createdAt         DateTime         @default(now()) @map("created_at")
+  createdBy         String           @map("created_by") @db.Uuid
+  updatedAt         DateTime         @updatedAt @map("updated_at")
+  updatedBy         String?          @map("updated_by") @db.Uuid
+
+  period          SurveyPeriod @relation(fields: [periodId], references: [id])
+  institution     Institution  @relation(fields: [institutionId], references: [id])
+  lastSubmittedBy User?        @relation("SubmissionLastSubmittedBy", fields: [lastSubmittedById], references: [id])
+  verifiedBy      User?        @relation("SubmissionVerifiedBy", fields: [verifiedById], references: [id])
+
+  answers           Answer[]
+  snapshots         SubmissionSnapshot[]
+  validationResults ValidationResult[]
+  revisionRequests  RevisionRequest[]
+  evidenceFiles     EvidenceFile[]
+  submissionScores  SubmissionScore[]
+
+  @@unique([periodId, institutionId])
+  @@index([periodId, status])
+  @@map("submissions")
+}
+
+model Answer {
+  id           String    @id @default(uuid()) @db.Uuid
+  submissionId String    @map("submission_id") @db.Uuid
+  questionId   String    @map("question_id") @db.Uuid
+  valueNumber  Decimal?  @map("value_number") @db.Decimal(18, 4)
+  valueText    String?   @map("value_text")
+  valueDate    DateTime? @map("value_date") @db.Date
+  valueJson    Json?     @map("value_json")
+  evidenceUrl  String?   @map("evidence_url")
+  isLocked     Boolean   @default(false) @map("is_locked")
+  createdAt    DateTime  @default(now()) @map("created_at")
+  createdBy    String    @map("created_by") @db.Uuid
+  updatedAt    DateTime  @updatedAt @map("updated_at")
+  updatedBy    String?   @map("updated_by") @db.Uuid
+
+  submission    Submission      @relation(fields: [submissionId], references: [id])
+  question      Question        @relation(fields: [questionId], references: [id])
+  updatedByUser User?           @relation(fields: [updatedBy], references: [id], map: "answers_updated_by_user_fkey")
+  history       AnswerHistory[]
+
+  @@unique([submissionId, questionId])
+  @@index([questionId])
+  @@map("answers")
+}
+
+model AnswerHistory {
+  id            BigInt   @id @default(autoincrement())
+  answerId      String   @map("answer_id") @db.Uuid
+  oldValue      Json?    @map("old_value")
+  newValue      Json?    @map("new_value")
+  revisionRound Int      @map("revision_round")
+  createdAt     DateTime @default(now()) @map("created_at")
+  createdBy     String   @map("created_by") @db.Uuid
+
+  answer Answer @relation(fields: [answerId], references: [id])
+
+  @@index([answerId])
+  @@map("answer_history")
+}
+
+model SubmissionSnapshot {
+  id            String   @id @default(uuid()) @db.Uuid
+  submissionId  String   @map("submission_id") @db.Uuid
+  revisionRound Int      @map("revision_round")
+  answers       Json
+  submittedById String   @map("submitted_by") @db.Uuid
+  submittedAt   DateTime @map("submitted_at")
+  createdAt     DateTime @default(now()) @map("created_at")
+  createdBy     String   @map("created_by") @db.Uuid
+
+  submission  Submission @relation(fields: [submissionId], references: [id])
+  submittedBy User       @relation(fields: [submittedById], references: [id])
+
+  @@index([submissionId])
+  @@map("submission_snapshots")
+}
+
+model ValidationResult {
+  id            String                 @id @default(uuid()) @db.Uuid
+  submissionId  String                 @map("submission_id") @db.Uuid
+  questionId    String                 @map("question_id") @db.Uuid
+  ruleId        String                 @map("rule_id") @db.Uuid
+  severity      RuleSeverity
+  message       String
+  revisionRound Int                    @map("revision_round")
+  status        ValidationResultStatus @default(OPEN)
+  reviewedById  String?                @map("reviewed_by") @db.Uuid
+  reviewedAt    DateTime?              @map("reviewed_at")
+  createdAt     DateTime               @default(now()) @map("created_at")
+  createdBy     String                 @map("created_by") @db.Uuid
+  updatedAt     DateTime               @updatedAt @map("updated_at")
+  updatedBy     String?                @map("updated_by") @db.Uuid
+
+  submission Submission     @relation(fields: [submissionId], references: [id])
+  question   Question       @relation(fields: [questionId], references: [id])
+  rule       ValidationRule @relation(fields: [ruleId], references: [id])
+  reviewedBy User?          @relation(fields: [reviewedById], references: [id])
+
+  @@map("validation_results")
+}
+
+model RevisionRequest {
+  id            String         @id @default(uuid()) @db.Uuid
+  submissionId  String         @map("submission_id") @db.Uuid
+  round         Int
+  generalNote   String?        @map("general_note")
+  deadlineAt    DateTime       @map("deadline_at")
+  status        RevisionStatus @default(OPEN)
+  requestedById String         @map("requested_by") @db.Uuid
+  resubmittedAt DateTime?      @map("resubmitted_at")
+  createdAt     DateTime       @default(now()) @map("created_at")
+  createdBy     String         @map("created_by") @db.Uuid
+  updatedAt     DateTime       @updatedAt @map("updated_at")
+  updatedBy     String?        @map("updated_by") @db.Uuid
+
+  submission  Submission            @relation(fields: [submissionId], references: [id])
+  requestedBy User                  @relation(fields: [requestedById], references: [id])
+  items       RevisionRequestItem[]
+
+  // TODO(migrasi-sql): partial unique (submission_id) WHERE status = 'OPEN'
+  @@map("revision_requests")
+}
+
+model RevisionRequestItem {
+  id                String   @id @default(uuid()) @db.Uuid
+  revisionRequestId String   @map("revision_request_id") @db.Uuid
+  questionId        String   @map("question_id") @db.Uuid
+  note              String?
+  createdAt         DateTime @default(now()) @map("created_at")
+  createdBy         String   @map("created_by") @db.Uuid
+  updatedAt         DateTime @updatedAt @map("updated_at")
+  updatedBy         String?  @map("updated_by") @db.Uuid
+
+  revisionRequest RevisionRequest @relation(fields: [revisionRequestId], references: [id])
+  question        Question        @relation(fields: [questionId], references: [id])
+
+  @@map("revision_request_items")
+}
+
+model EvidenceFile {
+  id           String    @id @default(uuid()) @db.Uuid
+  submissionId String    @map("submission_id") @db.Uuid
+  questionId   String?   @map("question_id") @db.Uuid
+  storageKey   String    @map("storage_key")
+  fileName     String    @map("file_name")
+  mimeType     String    @map("mime_type")
+  sizeBytes    BigInt    @map("size_bytes")
+  uploadedById String    @map("uploaded_by") @db.Uuid
+  createdAt    DateTime  @default(now()) @map("created_at")
+  createdBy    String    @map("created_by") @db.Uuid
+  updatedAt    DateTime  @updatedAt @map("updated_at")
+  updatedBy    String?   @map("updated_by") @db.Uuid
+  deletedAt    DateTime? @map("deleted_at")
+  deletedBy    String?   @map("deleted_by") @db.Uuid
+
+  submission Submission @relation(fields: [submissionId], references: [id])
+  question   Question?  @relation(fields: [questionId], references: [id])
+  uploadedBy User       @relation(fields: [uploadedById], references: [id])
+
+  @@map("evidence_files")
+}
+
+// =========================================================================
+// 06 Mesin skoring
+// =========================================================================
+
+model ScoringScheme {
+  id           String       @id @default(uuid()) @db.Uuid
+  periodId     String       @map("period_id") @db.Uuid
+  name         String
+  version      Int          @default(1)
+  status       SchemeStatus @default(DRAFT)
+  scale        Decimal      @default(100) @db.Decimal(6, 2)
+  copiedFromId String?      @map("copied_from_id") @db.Uuid
+  notes        String?
+  activatedAt  DateTime?    @map("activated_at")
+  createdAt    DateTime     @default(now()) @map("created_at")
+  createdBy    String       @map("created_by") @db.Uuid
+  updatedAt    DateTime     @updatedAt @map("updated_at")
+  updatedBy    String?      @map("updated_by") @db.Uuid
+  deletedAt    DateTime?    @map("deleted_at")
+  deletedBy    String?      @map("deleted_by") @db.Uuid
+
+  period     SurveyPeriod    @relation(fields: [periodId], references: [id])
+  copiedFrom ScoringScheme?  @relation("ScoringSchemeCopy", fields: [copiedFromId], references: [id])
+  copies     ScoringScheme[] @relation("ScoringSchemeCopy")
+
+  nodes            ScoreNode[]
+  categories       ScoreCategory[]
+  runs             ScoreRun[]
+  submissionScores SubmissionScore[]
+
+  // TODO(migrasi-sql): partial unique (period_id) WHERE status = 'ACTIVE'
+  @@map("scoring_schemes")
+}
+
+model ScoreNode {
+  id                  String            @id @default(uuid()) @db.Uuid
+  schemeId            String            @map("scheme_id") @db.Uuid
+  level               NodeLevel
+  code                String
+  name                String
+  formula             String?
+  normalization       NormalizationType @default(NONE)
+  normalizationParams Json?             @map("normalization_params")
+  aggregation         AggregationType   @default(WEIGHTED_SUM)
+  isRoot              Boolean           @default(false) @map("is_root")
+  sortOrder           Int               @default(0) @map("sort_order")
+  createdAt           DateTime          @default(now()) @map("created_at")
+  createdBy           String            @map("created_by") @db.Uuid
+  updatedAt           DateTime          @updatedAt @map("updated_at")
+  updatedBy           String?           @map("updated_by") @db.Uuid
+  deletedAt           DateTime?         @map("deleted_at")
+  deletedBy           String?           @map("deleted_by") @db.Uuid
+
+  scheme ScoringScheme @relation(fields: [schemeId], references: [id])
+
+  edgesAsParent ScoreNodeEdge[]         @relation("ScoreNodeEdgeParent")
+  edgesAsChild  ScoreNodeEdge[]         @relation("ScoreNodeEdgeChild")
+  variables     ScoreNodeVariable[]
+  typeOverrides ScoreNodeTypeOverride[]
+  scoreDetails  SubmissionScoreDetail[]
+
+  @@unique([schemeId, code])
+  @@map("score_nodes")
+}
+
+model ScoreNodeEdge {
+  parentNodeId String   @map("parent_node_id") @db.Uuid
+  childNodeId  String   @map("child_node_id") @db.Uuid
+  weight       Decimal  @db.Decimal(5, 4)
+  createdAt    DateTime @default(now()) @map("created_at")
+  createdBy    String   @map("created_by") @db.Uuid
+  updatedAt    DateTime @updatedAt @map("updated_at")
+  updatedBy    String?  @map("updated_by") @db.Uuid
+
+  parent ScoreNode @relation("ScoreNodeEdgeParent", fields: [parentNodeId], references: [id])
+  child  ScoreNode @relation("ScoreNodeEdgeChild", fields: [childNodeId], references: [id])
+
+  // TODO(migrasi-sql): CHECK(parent_node_id <> child_node_id)
+  @@id([parentNodeId, childNodeId])
+  @@map("score_node_edges")
+}
+
+model ScoreNodeVariable {
+  nodeId       String   @map("node_id") @db.Uuid
+  questionId   String   @map("question_id") @db.Uuid
+  variableCode String   @map("variable_code")
+  createdAt    DateTime @default(now()) @map("created_at")
+  createdBy    String   @map("created_by") @db.Uuid
+
+  node     ScoreNode @relation(fields: [nodeId], references: [id])
+  question Question  @relation(fields: [questionId], references: [id])
+
+  @@id([nodeId, questionId])
+  @@map("score_node_variables")
+}
+
+model ScoreNodeTypeOverride {
+  id                  String    @id @default(uuid()) @db.Uuid
+  nodeId              String    @map("node_id") @db.Uuid
+  institutionTypeId   String    @map("institution_type_id") @db.Uuid
+  normalizationParams Json?     @map("normalization_params")
+  formula             String?
+  createdAt           DateTime  @default(now()) @map("created_at")
+  createdBy           String    @map("created_by") @db.Uuid
+  updatedAt           DateTime  @updatedAt @map("updated_at")
+  updatedBy           String?   @map("updated_by") @db.Uuid
+  deletedAt           DateTime? @map("deleted_at")
+  deletedBy           String?   @map("deleted_by") @db.Uuid
+
+  node            ScoreNode       @relation(fields: [nodeId], references: [id])
+  institutionType InstitutionType @relation(fields: [institutionTypeId], references: [id])
+
+  @@map("score_node_type_overrides")
+}
+
+model ScoreCategory {
+  id        String    @id @default(uuid()) @db.Uuid
+  schemeId  String    @map("scheme_id") @db.Uuid
+  name      String
+  minScore  Decimal   @map("min_score") @db.Decimal(6, 2)
+  maxScore  Decimal   @map("max_score") @db.Decimal(6, 2)
+  color     String?
+  sortOrder Int       @default(0) @map("sort_order")
+  createdAt DateTime  @default(now()) @map("created_at")
+  createdBy String    @map("created_by") @db.Uuid
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  updatedBy String?   @map("updated_by") @db.Uuid
+  deletedAt DateTime? @map("deleted_at")
+  deletedBy String?   @map("deleted_by") @db.Uuid
+
+  scheme           ScoringScheme     @relation(fields: [schemeId], references: [id])
+  submissionScores SubmissionScore[]
+
+  @@map("score_categories")
+}
+
+model ScoreRun {
+  id              String    @id @default(uuid()) @db.Uuid
+  schemeId        String    @map("scheme_id") @db.Uuid
+  mode            RunMode
+  status          RunStatus @default(RUNNING)
+  submissionCount Int       @default(0) @map("submission_count")
+  errorLog        String?   @map("error_log")
+  triggeredById   String    @map("triggered_by") @db.Uuid
+  startedAt       DateTime? @map("started_at")
+  finishedAt      DateTime? @map("finished_at")
+  createdAt       DateTime  @default(now()) @map("created_at")
+  createdBy       String    @map("created_by") @db.Uuid
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+  updatedBy       String?   @map("updated_by") @db.Uuid
+
+  scheme      ScoringScheme     @relation(fields: [schemeId], references: [id])
+  triggeredBy User              @relation(fields: [triggeredById], references: [id])
+  scores      SubmissionScore[]
+
+  @@map("score_runs")
+}
+
+model SubmissionScore {
+  id             String   @id @default(uuid()) @db.Uuid
+  runId          String   @map("run_id") @db.Uuid
+  submissionId   String   @map("submission_id") @db.Uuid
+  schemeId       String   @map("scheme_id") @db.Uuid
+  indexScore     Decimal  @map("index_score") @db.Decimal(6, 2)
+  categoryId     String?  @map("category_id") @db.Uuid
+  rankOverall    Int?     @map("rank_overall")
+  rankInType     Int?     @map("rank_in_type")
+  rankInDistrict Int?     @map("rank_in_district")
+  isCurrent      Boolean  @default(false) @map("is_current")
+  createdAt      DateTime @default(now()) @map("created_at")
+  createdBy      String   @map("created_by") @db.Uuid
+  updatedAt      DateTime @updatedAt @map("updated_at")
+  updatedBy      String?  @map("updated_by") @db.Uuid
+
+  run        ScoreRun                @relation(fields: [runId], references: [id])
+  submission Submission              @relation(fields: [submissionId], references: [id])
+  scheme     ScoringScheme           @relation(fields: [schemeId], references: [id])
+  category   ScoreCategory?          @relation(fields: [categoryId], references: [id])
+  details    SubmissionScoreDetail[]
+
+  @@index([schemeId, indexScore])
+  // TODO(migrasi-sql): partial unique (submission_id) WHERE is_current
+  @@map("submission_scores")
+}
+
+model SubmissionScoreDetail {
+  id                String   @id @default(uuid()) @db.Uuid
+  submissionScoreId String   @map("submission_score_id") @db.Uuid
+  nodeId            String   @map("node_id") @db.Uuid
+  rawValue          Decimal? @map("raw_value") @db.Decimal(18, 6)
+  normalizedValue   Decimal? @map("normalized_value") @db.Decimal(10, 6)
+  weightedValue     Decimal? @map("weighted_value") @db.Decimal(18, 6)
+  createdAt         DateTime @default(now()) @map("created_at")
+  createdBy         String   @map("created_by") @db.Uuid
+
+  submissionScore SubmissionScore @relation(fields: [submissionScoreId], references: [id])
+  node            ScoreNode       @relation(fields: [nodeId], references: [id])
+
+  @@map("submission_score_details")
+}
+
+// =========================================================================
+// 07 Email & reminder
+// =========================================================================
+
+model EmailTemplate {
+  id                 String           @id @default(uuid()) @db.Uuid
+  key                EmailTemplateKey @unique
+  subject            String
+  bodyHtml           String           @map("body_html")
+  availableVariables Json?            @map("available_variables")
+  isActive           Boolean          @default(true) @map("is_active")
+  createdAt          DateTime         @default(now()) @map("created_at")
+  createdBy          String           @map("created_by") @db.Uuid
+  updatedAt          DateTime         @updatedAt @map("updated_at")
+  updatedBy          String?          @map("updated_by") @db.Uuid
+  deletedAt          DateTime?        @map("deleted_at")
+  deletedBy          String?          @map("deleted_by") @db.Uuid
+
+  emailLogs         EmailLog[]
+  reminderSchedules ReminderSchedule[]
+
+  @@map("email_templates")
+}
+
+model ReminderSchedule {
+  id             String       @id @default(uuid()) @db.Uuid
+  periodId       String       @map("period_id") @db.Uuid
+  kind           ReminderKind
+  offsetDays     Int          @map("offset_days")
+  targetStatuses Json         @map("target_statuses")
+  templateId     String       @map("template_id") @db.Uuid
+  isActive       Boolean      @default(true) @map("is_active")
+  lastRunAt      DateTime?    @map("last_run_at")
+  createdAt      DateTime     @default(now()) @map("created_at")
+  createdBy      String       @map("created_by") @db.Uuid
+  updatedAt      DateTime     @updatedAt @map("updated_at")
+  updatedBy      String?      @map("updated_by") @db.Uuid
+  deletedAt      DateTime?    @map("deleted_at")
+  deletedBy      String?      @map("deleted_by") @db.Uuid
+
+  period   SurveyPeriod  @relation(fields: [periodId], references: [id])
+  template EmailTemplate @relation(fields: [templateId], references: [id])
+
+  @@map("reminder_schedules")
+}
+
+model EmailLog {
+  id                String      @id @default(uuid()) @db.Uuid
+  templateId        String      @map("template_id") @db.Uuid
+  userId            String?     @map("user_id") @db.Uuid
+  institutionId     String?     @map("institution_id") @db.Uuid
+  toEmail           String      @map("to_email")
+  subject           String
+  status            EmailStatus @default(QUEUED)
+  providerMessageId String?     @map("provider_message_id")
+  errorMessage      String?     @map("error_message")
+  relatedType       String?     @map("related_type")
+  relatedId         String?     @map("related_id") @db.Uuid
+  sentAt            DateTime?   @map("sent_at")
+  openedAt          DateTime?   @map("opened_at")
+  createdAt         DateTime    @default(now()) @map("created_at")
+  createdBy         String      @map("created_by") @db.Uuid
+  updatedAt         DateTime    @updatedAt @map("updated_at")
+  updatedBy         String?     @map("updated_by") @db.Uuid
+
+  template    EmailTemplate @relation(fields: [templateId], references: [id])
+  user        User?         @relation(fields: [userId], references: [id])
+  institution Institution?  @relation(fields: [institutionId], references: [id])
+
+  @@index([status])
+  @@index([institutionId, templateId, sentAt])
+  @@map("email_logs")
+}
+
+// =========================================================================
+// 08 Report, impor & sistem
+// =========================================================================
+
+model SavedReportFilter {
+  id        String    @id @default(uuid()) @db.Uuid
+  userId    String    @map("user_id") @db.Uuid
+  name      String
+  filters   Json
+  isShared  Boolean   @default(false) @map("is_shared")
+  createdAt DateTime  @default(now()) @map("created_at")
+  createdBy String    @map("created_by") @db.Uuid
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  updatedBy String?   @map("updated_by") @db.Uuid
+  deletedAt DateTime? @map("deleted_at")
+  deletedBy String?   @map("deleted_by") @db.Uuid
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@map("saved_report_filters")
+}
+
+model ImportJob {
+  id             String        @id @default(uuid()) @db.Uuid
+  type           ImportJobType
+  fileName       String        @map("file_name")
+  status         ImportStatus  @default(UPLOADED)
+  totalRows      Int           @default(0) @map("total_rows")
+  validRows      Int           @default(0) @map("valid_rows")
+  errorRows      Int           @default(0) @map("error_rows")
+  sendActivation Boolean       @default(false) @map("send_activation")
+  committedAt    DateTime?     @map("committed_at")
+  createdAt      DateTime      @default(now()) @map("created_at")
+  createdBy      String        @map("created_by") @db.Uuid
+  updatedAt      DateTime      @updatedAt @map("updated_at")
+  updatedBy      String?       @map("updated_by") @db.Uuid
+
+  rows ImportJobRow[]
+
+  @@map("import_jobs")
+}
+
+model ImportJobRow {
+  id            String          @id @default(uuid()) @db.Uuid
+  importJobId   String          @map("import_job_id") @db.Uuid
+  rowNumber     Int             @map("row_number")
+  payload       Json
+  status        ImportRowStatus @default(VALID)
+  errors        Json?
+  institutionId String?         @map("institution_id") @db.Uuid
+  createdAt     DateTime        @default(now()) @map("created_at")
+  createdBy     String          @map("created_by") @db.Uuid
+  updatedAt     DateTime        @updatedAt @map("updated_at")
+  updatedBy     String?         @map("updated_by") @db.Uuid
+
+  importJob   ImportJob    @relation(fields: [importJobId], references: [id])
+  institution Institution? @relation(fields: [institutionId], references: [id])
+
+  @@map("import_job_rows")
+}
+
+model AuditLog {
+  id            BigInt      @id @default(autoincrement())
+  createdAt     DateTime    @default(now()) @map("created_at")
+  actorUserId   String?     @map("actor_user_id") @db.Uuid
+  actorRole     UserRole    @map("actor_role")
+  action        AuditAction
+  tableName     String      @map("table_name")
+  recordId      String      @map("record_id")
+  oldData       Json?       @map("old_data")
+  newData       Json?       @map("new_data")
+  changedFields Json?       @map("changed_fields")
+  source        LogSource
+  requestId     String?     @map("request_id") @db.Uuid
+  ipAddress     String?     @map("ip_address")
+  userAgent     String?     @map("user_agent")
+
+  @@index([tableName, recordId, createdAt])
+  @@index([actorUserId, createdAt])
+  @@index([requestId])
+  @@map("audit_logs")
+}
+
+model ActivityLog {
+  id          BigInt       @id @default(autoincrement())
+  createdAt   DateTime     @default(now()) @map("created_at")
+  userId      String?      @map("user_id") @db.Uuid
+  actorRole   UserRole     @map("actor_role")
+  activity    ActivityType
+  entityType  String?      @map("entity_type")
+  entityId    String?      @map("entity_id") @db.Uuid
+  description String?
+  metadata    Json?
+  requestId   String?      @map("request_id") @db.Uuid
+  ipAddress   String?      @map("ip_address")
+  userAgent   String?      @map("user_agent")
+
+  @@index([userId, createdAt])
+  @@index([activity, createdAt])
+  @@map("activity_logs")
+}
+
+model AppSetting {
+  key       String   @id
+  value     Json
+  createdAt DateTime @default(now()) @map("created_at")
+  createdBy String   @map("created_by") @db.Uuid
+  updatedAt DateTime @updatedAt @map("updated_at")
+  updatedBy String?  @map("updated_by") @db.Uuid
+
+  @@map("app_settings")
+}
