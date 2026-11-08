@@ -1,0 +1,11 @@
+-- AlterEnum
+-- Tambah nilai enum untuk mencatat percobaan akses tanpa izin (AC M04: 403 +
+-- activity_logs). Tidak ada di ERD §09 — lihat CLAUDE.md "Keputusan yang
+-- sudah diambil" untuk alasan penambahan ini.
+--
+-- CATATAN: baris DROP CONSTRAINT yang Prisma hasilkan otomatis untuk 98 FK
+-- created_by/updated_by/deleted_by (ditambah manual di migrasi sebelumnya)
+-- SUDAH DIHAPUS dari file ini dengan sengaja. Prisma selalu menganggap FK
+-- itu "drift" karena tidak dimodelkan sebagai relasi — lihat peringatan
+-- keras di CLAUDE.md. Jangan regenerate file ini tanpa memeriksa ulang.
+ALTER TYPE "ActivityType" ADD VALUE 'UNAUTHORIZED_ACCESS';

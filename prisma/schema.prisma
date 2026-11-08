@@ -62,6 +62,7 @@ enum ActivityType {
   PUBLISH_SCORES
   RUN_SCORING
   IMPERSONATE_VIEW // belum diimplementasi Fase 1 — lihat CLAUDE.md "Keputusan yang sudah diambil"
+  UNAUTHORIZED_ACCESS // tidak ada di ERD §09 — ditambah Tahap 6 karena AC M04 butuh ini dicatat (403 saat peran salah)
 }
 
 enum UserStatus {
