@@ -71,6 +71,39 @@ export async function POST(request: Request) {
           return NextResponse.json(result);
         }
 
+        case "create-active-admin": {
+          const suffix = randomUUID().slice(0, 8);
+          const email = `e2e-admin-${suffix}@libcon.local`;
+          const passwordHash = await hashPassword(body.password);
+          await withDb((tx) =>
+            tx.user.create({
+              data: {
+                role: body.role === "SUPER_ADMIN" ? "SUPER_ADMIN" : "ADMIN",
+                username: email,
+                email,
+                fullName: `Admin E2E ${suffix}`,
+                passwordHash,
+                status: "ACTIVE",
+                createdBy: SYSTEM_USER_ID,
+              },
+            }),
+          );
+          return NextResponse.json({ username: email });
+        }
+
+        // Token mentah tidak pernah disimpan (hanya hash), jadi e2e tidak bisa membacanya dari
+        // email — cek email ACTIVATION memang tercatat, lalu terbitkan token baru (= kirim ulang).
+        case "reissue-activation-token": {
+          const user = await prisma.user.findUniqueOrThrow({ where: { username: body.username } });
+          const email = await prisma.emailLog.findFirst({
+            where: { userId: user.id, status: "SENT", template: { key: "ACTIVATION" } },
+          });
+          const raw = await withDb((tx) =>
+            issueAuthToken(tx, { userId: user.id, type: "ACTIVATION", createdBy: SYSTEM_USER_ID }),
+          );
+          return NextResponse.json({ token: raw, activationEmailSent: Boolean(email), sentTo: email?.toEmail });
+        }
+
         case "check-unauthorized-access-log": {
           const log = await prisma.activityLog.findFirst({
             where: { userId: body.userId, activity: "UNAUTHORIZED_ACCESS" },
