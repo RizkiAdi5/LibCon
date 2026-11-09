@@ -46,3 +46,13 @@ export async function requireRole(allowed: UserRole[]): Promise<SessionUser> {
 
   return user;
 }
+
+/**
+ * Jalankan `fn` dengan request context atas nama user sesi — dipakai server
+ * action panel admin setelah `requireRole()`, supaya `withDb()` mencatat aktor
+ * yang benar di audit_logs.
+ */
+export async function runAsUser<T>(user: SessionUser, fn: () => Promise<T>): Promise<T> {
+  const { ip, userAgent } = await getClientMeta();
+  return runWithRequestContext({ userId: user.id, requestId: randomUUID(), ip, userAgent, source: "WEB" }, fn);
+}
