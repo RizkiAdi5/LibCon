@@ -7,12 +7,12 @@ import { prisma } from "@/lib/db/client";
 import { withDb } from "@/lib/db/withDb";
 import { runWithRequestContext } from "@/lib/db/requestContext";
 import { getClientMeta } from "@/lib/auth/guard";
-import { consumeAuthToken, findTokenOwnerId, issueAuthToken } from "@/lib/auth/token";
+import { consumeAuthToken, findTokenOwnerId } from "@/lib/auth/token";
+import { sendActivation } from "@/lib/auth/activation";
 import { hashPassword } from "@/lib/auth/password";
 import { checkPasswordPolicy } from "@/lib/auth/passwordPolicy";
 import { getPasswordPolicy } from "@/lib/settings";
 import { SYSTEM_USER_ID } from "@/lib/auth/constants";
-import { sendTemplateEmail } from "@/lib/email/send";
 
 const activateSchema = z.object({
   token: z.string().min(1),
@@ -112,20 +112,7 @@ export async function resendActivationAction(_prev: ResendState, formData: FormD
       if (!user) return { success: true };
 
       await withDb(async (tx) => {
-        const raw = await issueAuthToken(tx, { userId: user.id, type: "ACTIVATION", createdBy: SYSTEM_USER_ID });
-        const link = `${process.env.NEXT_PUBLIC_APP_URL}/aktivasi/${raw}`;
-        await sendTemplateEmail(tx, {
-          key: "ACTIVATION",
-          to: user.institution?.officialEmail ?? user.email,
-          variables: {
-            nama_lembaga: user.institution?.libraryName ?? user.fullName,
-            npp: user.username,
-            link,
-          },
-          createdBy: SYSTEM_USER_ID,
-          userId: user.id,
-          institutionId: user.institutionId ?? undefined,
-        });
+        await sendActivation(tx, user, SYSTEM_USER_ID);
         await tx.activityLog.create({
           data: {
             userId: user.id,
