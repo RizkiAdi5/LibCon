@@ -5,6 +5,9 @@ import { prisma } from "@/lib/db/client";
 import { requireRole } from "@/lib/auth/guard";
 import { formatWib } from "@/lib/date";
 import { FlashMessage } from "@/components/flash-message";
+import { ConfirmAction } from "@/components/confirm-action";
+import { Button } from "@/components/ui/button";
+import { resendActivationAction, setInstitutionActiveAction } from "../actions";
 import { loadInstitutionFormOptions } from "../form-options";
 import { InstitutionForm } from "../institution-form";
 import { ACCOUNT_STATUS } from "../labels";
@@ -91,6 +94,35 @@ export default async function DetailPesertaPage({
             ))}
           </tbody>
         </table>
+        {!isInactive && institution.users.some((u) => u.isPrimary && u.status === "PENDING_ACTIVATION") && (
+          <form action={resendActivationAction}>
+            <input type="hidden" name="institutionId" value={institution.id} />
+            <Button type="submit" variant="outline" size="sm">
+              Kirim ulang aktivasi
+            </Button>
+          </form>
+        )}
+      </section>
+
+      <section className="space-y-3">
+        <h2 className="font-semibold">Status lembaga</h2>
+        {isInactive ? (
+          <form action={setInstitutionActiveAction}>
+            <input type="hidden" name="id" value={institution.id} />
+            <input type="hidden" name="active" value="true" />
+            <Button type="submit" variant="outline">
+              Pulihkan lembaga
+            </Button>
+          </form>
+        ) : (
+          <ConfirmAction
+            action={setInstitutionActiveAction}
+            fields={{ id: institution.id, active: "false" }}
+            label="Nonaktifkan lembaga"
+            confirmLabel={`Ya, nonaktifkan ${institution.libraryName}`}
+            impact="Semua akun lembaga ini langsung keluar dan tidak bisa login, dan lembaga tidak masuk report default. Data tetap tersimpan dan bisa dipulihkan."
+          />
+        )}
       </section>
     </div>
   );

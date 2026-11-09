@@ -2,7 +2,7 @@
 
 import { redirect } from "next/navigation";
 import { z } from "zod";
-import { Prisma } from "@/generated/prisma/client";
+import { Prisma, type UserRole } from "@/generated/prisma/client";
 import { prisma } from "@/lib/db/client";
 import { withDb } from "@/lib/db/withDb";
 import { requireRole, runAsUser } from "@/lib/auth/guard";
@@ -139,6 +139,106 @@ export async function saveInstitutionAction(
 
   if ("redirectTo" in result) redirect(result.redirectTo);
   return { ...result, values };
+}
+
+function backTo(path: string, params: Record<string, string>): never {
+  redirect(`${path}?${new URLSearchParams(params)}`);
+}
+
+/**
+ * Kirim ulang aktivasi ke akun utama lembaga-lembaga yang dipilih (FR-03.09).
+ * Hanya akun PENDING_ACTIVATION di lembaga aktif; token lama dicabut (BR-03).
+ * Setiap lembaga transaksi sendiri supaya satu kegagalan tidak membatalkan sisanya.
+ */
+async function resendActivations(institutionIds: string[], actor: { id: string; role: UserRole }) {
+  const accounts = await prisma.user.findMany({
+    where: {
+      institutionId: { in: institutionIds },
+      isPrimary: true,
+      status: "PENDING_ACTIVATION",
+      deletedAt: null,
+      institution: { deletedAt: null, isActive: true },
+    },
+    include: { institution: true },
+  });
+
+  let failed = 0;
+  for (const account of accounts) {
+    try {
+      await withDb(async (tx) => {
+        await sendActivation(tx, account, actor.id);
+        await tx.activityLog.create({
+          data: {
+            userId: actor.id,
+            actorRole: actor.role,
+            activity: "RESEND_ACTIVATION",
+            description: `Kirim ulang aktivasi ke ${account.username}`,
+          },
+        });
+      });
+    } catch (error) {
+      console.error(`[peserta] gagal kirim ulang aktivasi ke ${account.username}`, error);
+      failed++;
+    }
+  }
+  return { sent: accounts.length - failed, skipped: institutionIds.length - accounts.length, failed };
+}
+
+function resendSummary({ sent, skipped, failed }: { sent: number; skipped: number; failed: number }): Record<string, string> {
+  const parts = [`Link aktivasi dikirim ulang ke ${sent} lembaga.`];
+  if (skipped) parts.push(`${skipped} dilewati (akun sudah aktif atau lembaga nonaktif).`);
+  if (failed) parts.push(`${failed} gagal dikirim, coba lagi.`);
+  return failed ? { error: parts.join(" ") } : { ok: parts.join(" ") };
+}
+
+export async function resendActivationAction(formData: FormData) {
+  const user = await requireRole(["ADMIN", "SUPER_ADMIN"]);
+  const parsed = z.uuid().safeParse(formData.get("institutionId"));
+  if (!parsed.success) backTo("/admin/peserta", { error: "Lembaga tidak valid" });
+
+  const result = await runAsUser(user, () => resendActivations([parsed.data], user));
+  backTo(`/admin/peserta/${parsed.data}`, resendSummary(result));
+}
+
+export async function bulkResendActivationAction(formData: FormData) {
+  const user = await requireRole(["ADMIN", "SUPER_ADMIN"]);
+  const parsed = z.array(z.uuid()).min(1).safeParse(formData.getAll("institutionId"));
+  if (!parsed.success) backTo("/admin/peserta", { error: "Pilih minimal satu lembaga" });
+
+  const result = await runAsUser(user, () => resendActivations([...new Set(parsed.data)], user));
+  backTo("/admin/peserta", resendSummary(result));
+}
+
+/**
+ * FR-03.10: nonaktifkan (soft delete) / pulihkan lembaga. Status akun tidak
+ * diubah supaya kembali seperti semula saat dipulihkan; login ditolak lewat
+ * cek lembaga di loginAction, dan sesi yang sedang aktif dicabut.
+ */
+export async function setInstitutionActiveAction(formData: FormData) {
+  const user = await requireRole(["ADMIN", "SUPER_ADMIN"]);
+  const parsed = z
+    .object({ id: z.uuid(), active: z.enum(["true", "false"]) })
+    .safeParse({ id: formData.get("id"), active: formData.get("active") });
+  if (!parsed.success) backTo("/admin/peserta", { error: "Lembaga tidak valid" });
+  const { id } = parsed.data;
+  const active = parsed.data.active === "true";
+
+  const institution = await runAsUser(user, () =>
+    withDb(async (tx) => {
+      const updated = await tx.institution.update({
+        where: { id },
+        data: active
+          ? { isActive: true, deletedAt: null, deletedBy: null, updatedBy: user.id }
+          : { isActive: false, deletedAt: new Date(), deletedBy: user.id, updatedBy: user.id },
+      });
+      if (!active) await tx.session.deleteMany({ where: { user: { institutionId: id } } });
+      return updated;
+    }),
+  );
+
+  backTo(`/admin/peserta/${id}`, {
+    ok: `${institution.libraryName} ${active ? "dipulihkan" : "dinonaktifkan. Akun lembaga ini tidak bisa login."}`,
+  });
 }
 
 async function createInstitution(data: InstitutionInput, actorId: string): Promise<string> {

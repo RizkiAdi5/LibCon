@@ -61,10 +61,11 @@ export async function getSessionUser(): Promise<SessionUser | null> {
 
   const session = await prisma.session.findUnique({
     where: { sessionTokenHash: hashSessionToken(raw) },
-    include: { user: true },
+    include: { user: { include: { institution: true } } },
   });
   if (!session || session.expiresAt < new Date()) return null;
   if (session.user.deletedAt || session.user.status !== "ACTIVE") return null;
+  if (session.user.institution?.deletedAt) return null; // FR-03.10, jaga-jaga jika sesi lolos dicabut
 
   return {
     id: session.user.id,

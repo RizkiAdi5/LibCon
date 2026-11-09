@@ -38,9 +38,11 @@ export async function loginAction(_prev: LoginState, formData: FormData): Promis
     async () => {
       const user = await prisma.user.findFirst({
         where: { OR: [{ username: identifier }, { email: identifier }] },
+        include: { institution: true },
       });
 
-      if (!user || user.deletedAt || user.status === "DISABLED") {
+      // FR-03.10: akun milik lembaga nonaktif tidak bisa login
+      if (!user || user.deletedAt || user.status === "DISABLED" || user.institution?.deletedAt) {
         await withDb((tx) =>
           tx.loginAttempt.create({
             data: { usernameInput: identifier, success: false, ipAddress: ip, userAgent, createdBy: SYSTEM_USER_ID },
