@@ -511,6 +511,8 @@ model SurveyPeriod {
   copiedFromId              String?       @map("copied_from_id") @db.Uuid
   revisionDeadlineDays      Int           @default(7) @map("revision_deadline_days")
   revisionScope             RevisionScope @default(SELECTED_QUESTIONS) @map("revision_scope")
+  // FR-02.08 batas lolos per periode — tidak ada di ERD, ditambah Tahap 9 (disetujui user)
+  passingScore              Decimal       @default(70) @map("passing_score") @db.Decimal(6, 2)
   showRankingToParticipants Boolean       @default(false) @map("show_ranking_to_participants")
   scoresPublishedAt         DateTime?     @map("scores_published_at")
   scoresPublishedById       String?       @map("scores_published_by") @db.Uuid
