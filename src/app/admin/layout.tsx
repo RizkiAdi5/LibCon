@@ -14,6 +14,7 @@ export default async function AdminLayout({ children }: { children: ReactNode })
         <span className="font-semibold">LibCon Admin — {user.fullName}</span>
         <nav className="flex gap-4 text-sm">
           <Link href="/admin/dashboard">Dashboard</Link>
+          <Link href="/admin/periode">Periode</Link>
           <Link href="/admin/peserta">Peserta</Link>
           <Link href="/admin/permintaan-akun">
             Permintaan Akun

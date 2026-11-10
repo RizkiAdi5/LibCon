@@ -129,6 +129,38 @@ export async function POST(request: Request) {
           return NextResponse.json({ ok: true });
         }
 
+        // Hanya satu periode OPEN boleh ada (FR-02.05) — arsipkan sisa periode uji (DRAFT/OPEN) dari run
+        // sebelumnya supaya cron tidak membuka/menahan periode lama
+        case "close-e2e-periods": {
+          await withDb((tx) =>
+            tx.surveyPeriod.updateMany({
+              where: { status: { in: ["DRAFT", "OPEN"] }, name: { startsWith: "E2E " } },
+              data: { status: "ARCHIVED", updatedBy: SYSTEM_USER_ID },
+            }),
+          );
+          const otherOpen = await prisma.surveyPeriod.findFirst({ where: { status: "OPEN", deletedAt: null } });
+          return NextResponse.json({ otherOpen: otherOpen?.name ?? null });
+        }
+
+        // Simulasi waktu lewat: tanggal tutup periode + semua perpanjangannya dipindah ke masa lalu
+        case "expire-period": {
+          const past = new Date(Date.now() - 60 * 60 * 1000);
+          await withDb(async (tx) => {
+            const period = await tx.surveyPeriod.findFirstOrThrow({ where: { name: body.name } });
+            await tx.surveyPeriod.update({
+              where: { id: period.id },
+              data: { opensAt: new Date(past.getTime() - 60 * 60 * 1000), closesAt: past, updatedBy: SYSTEM_USER_ID },
+            });
+            if (body.includeExtensions) {
+              await tx.periodExtension.updateMany({
+                where: { periodId: period.id },
+                data: { newClosesAt: past, updatedBy: SYSTEM_USER_ID },
+              });
+            }
+          });
+          return NextResponse.json({ ok: true });
+        }
+
         case "check-unauthorized-access-log": {
           const log = await prisma.activityLog.findFirst({
             where: { userId: body.userId, activity: "UNAUTHORIZED_ACCESS" },
