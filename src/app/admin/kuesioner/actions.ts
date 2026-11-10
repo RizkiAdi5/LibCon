@@ -17,6 +17,8 @@ import {
 } from "@/lib/questionnaire";
 import { conditionSchema, questionSchema, ruleParams, ruleSchema, sectionSchema, type QuestionInput } from "@/lib/validation/question";
 import { analyzeExpression, findConditionCycle } from "@/lib/validation/engine";
+import { findPublishProblems } from "@/lib/validation/publish";
+import { duplicateQuestion, duplicateSection } from "@/lib/questionnaireCopy";
 
 const ROLES = ["ADMIN", "SUPER_ADMIN"] as const; // flowchart §13: builder Penuh untuk keduanya
 const LOCKED = "Kuesioner sudah terbit sehingga strukturnya terkunci. Hanya teks bantuan yang masih bisa diubah.";
@@ -485,6 +487,69 @@ export async function deleteConditionAction(formData: FormData) {
     ),
   );
   backTo(path, { ok: "Logika tampil dihapus" });
+}
+
+/** FR-06.10: periksa lalu terbitkan; setelah ini struktur terkunci. */
+export async function publishQuestionnaireAction(formData: FormData) {
+  const user = await requireRole([...ROLES]);
+  const periodId = periodIdSchema.safeParse(formData.get("periodId"));
+  if (!periodId.success) backTo("/admin/kuesioner", { error: "Periode tidak valid" });
+  const path = pathOf(periodId.data);
+  const loaded = await loadQuestionnaire(periodId.data);
+  if (typeof loaded === "string") backTo(path, { error: loaded });
+  if (loaded.published) backTo(path, { error: "Kuesioner sudah terbit." });
+  const { questionnaire } = loaded;
+
+  const questions = await prisma.question.findMany({
+    where: { questionnaireId: questionnaire.id, deletedAt: null, section: { deletedAt: null } },
+    include: {
+      _count: { select: { options: { where: { deletedAt: null } } } },
+      validationRules: { where: { deletedAt: null } },
+      conditionsAsTarget: { where: { deletedAt: null } },
+    },
+  });
+  const problems = findPublishProblems(
+    questions.map((q) => ({ id: q.id, code: q.code, type: q.type, optionCount: q._count.options })),
+    questions.flatMap((q) => q.validationRules.map((r) => ({ questionId: q.id, ruleType: r.ruleType, params: r.params as Record<string, unknown> }))),
+    questions.flatMap((q) => q.conditionsAsTarget),
+  );
+  if (problems.length) backTo(path, { error: `Belum bisa terbit: ${problems.join(" ")}` });
+
+  await runAsUser(user, () =>
+    withDb((tx) =>
+      tx.questionnaire.update({
+        where: { id: questionnaire.id },
+        data: { status: "PUBLISHED", publishedAt: new Date(), publishedById: user.id, updatedBy: user.id },
+      }),
+    ),
+  );
+  backTo(path, { ok: `Kuesioner terbit dengan ${questions.length} soal. Struktur sekarang terkunci.` });
+}
+
+/** FR-06.11: duplikat soal / bagian (hanya saat Draf). */
+export async function duplicateAction(formData: FormData) {
+  const user = await requireRole([...ROLES]);
+  const parsed = z
+    .object({ periodId: z.uuid(), kind: z.enum(["section", "question"]), id: z.uuid() })
+    .safeParse({ periodId: formData.get("periodId"), kind: formData.get("kind"), id: formData.get("id") });
+  if (!parsed.success) backTo("/admin/kuesioner", { error: "Duplikat tidak valid" });
+  const { periodId, kind, id } = parsed.data;
+  const path = pathOf(periodId);
+  const loaded = await loadQuestionnaire(periodId);
+  if (typeof loaded === "string") backTo(path, { error: loaded });
+  if (loaded.published) backTo(path, { error: LOCKED });
+  const questionnaireId = loaded.questionnaire.id;
+
+  if (kind === "question" && !(await prisma.question.findFirst({ where: { id, questionnaireId, deletedAt: null } }))) {
+    backTo(path, { error: "Soal tidak ditemukan" });
+  }
+  await runAsUser(user, () =>
+    withDb(async (tx) => {
+      if (kind === "section") await duplicateSection(tx, id, questionnaireId, user.id);
+      else await duplicateQuestion(tx, id, questionnaireId, user.id);
+    }),
+  );
+  backTo(path, { ok: kind === "section" ? "Bagian diduplikat beserta soalnya" : "Soal diduplikat" });
 }
 
 export async function deleteQuestionAction(formData: FormData) {

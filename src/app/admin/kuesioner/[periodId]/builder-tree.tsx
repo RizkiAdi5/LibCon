@@ -17,7 +17,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ConfirmAction } from "@/components/confirm-action";
-import { deleteQuestionAction, deleteSectionAction, reorderAction, saveSectionAction } from "../actions";
+import { deleteQuestionAction, deleteSectionAction, duplicateAction, reorderAction, saveSectionAction } from "../actions";
 
 export type TreeQuestion = { id: string; code: string; label: string; typeLabel: string; isRequired: boolean; appliesTo: string };
 export type TreeSection = {
@@ -96,6 +96,19 @@ function SortableList<T extends { id: string }>({
   );
 }
 
+function DuplicateButton({ periodId, kind, id, label }: { periodId: string; kind: "section" | "question"; id: string; label: string }) {
+  return (
+    <form action={duplicateAction}>
+      <input type="hidden" name="periodId" value={periodId} />
+      <input type="hidden" name="kind" value={kind} />
+      <input type="hidden" name="id" value={id} />
+      <button type="submit" className="text-sm underline" aria-label={label}>
+        Duplikat
+      </button>
+    </form>
+  );
+}
+
 export function SectionFields({ section, published }: { section?: TreeSection; published: boolean }) {
   const p = section?.id ?? "new";
   return (
@@ -161,6 +174,7 @@ export function BuilderTree({
                   </Button>
                 </form>
               </details>
+              {!published && <DuplicateButton periodId={periodId} kind="section" id={section.id} label={`Duplikat bagian ${section.title}`} />}
               {!published && (
                 <ConfirmAction
                   action={deleteSectionAction}
@@ -193,6 +207,7 @@ export function BuilderTree({
                   <Link href={`/admin/kuesioner/${periodId}/soal/${q.id}`} className="underline">
                     {published ? "Lihat / ubah teks bantuan" : "Ubah"}
                   </Link>
+                  {!published && <DuplicateButton periodId={periodId} kind="question" id={q.id} label={`Duplikat ${q.code}`} />}
                   {!published && (
                     <ConfirmAction
                       action={deleteQuestionAction}

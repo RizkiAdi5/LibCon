@@ -4,11 +4,12 @@ import { z } from "zod";
 import { prisma } from "@/lib/db/client";
 import { requireRole } from "@/lib/auth/guard";
 import { QUESTION_TYPE_LABEL, type BuilderQuestionType } from "@/lib/questionnaire";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { FlashMessage } from "@/components/flash-message";
-import { saveSectionAction, updateQuestionnaireAction } from "../actions";
+import { ConfirmAction } from "@/components/confirm-action";
+import { publishQuestionnaireAction, saveSectionAction, updateQuestionnaireAction } from "../actions";
 import { BuilderTree, SectionFields } from "./builder-tree";
 
 export default async function BuilderPage({
@@ -74,6 +75,21 @@ export default async function BuilderPage({
       </div>
       <FlashMessage ok={ok} error={error} />
       {archived && <p className="text-sm text-amber-700">Periode sudah diarsipkan — kuesioner hanya bisa dilihat.</p>}
+
+      <div className="flex flex-wrap items-start gap-4">
+        <Link href={`/admin/kuesioner/${periodId}/pratinjau`} className={buttonVariants({ variant: "outline" })}>
+          Pratinjau sebagai peserta
+        </Link>
+        {!archived && !published && (
+          <ConfirmAction
+            action={publishQuestionnaireAction}
+            fields={{ periodId }}
+            label="Terbitkan kuesioner"
+            confirmLabel="Ya, terbitkan"
+            impact="Sistem memeriksa kode variabel, rujukan aturan, dan logika tampil. Setelah terbit, struktur soal terkunci — hanya teks bantuan dan pesan aturan yang masih bisa diubah."
+          />
+        )}
+      </div>
 
       {!archived && (
         <details>

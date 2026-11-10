@@ -33,6 +33,7 @@ async function createQuestionnaire(page: Page) {
   await page.goto("/admin/kuesioner");
   await page.getByRole("button", { name: `Buat kuesioner ${name}` }).click();
   await expect(flash(page)).toContainText("Kuesioner dibuat (Draf)");
+  return name;
 }
 
 async function addSection(page: Page, title: string, evidence = "") {
@@ -166,4 +167,91 @@ test("aturan validasi + uji nilai + logika tampil tanpa siklus [FR-06.05, FR-06.
   await page.getByLabel("operator", { exact: true }).selectOption("NOT_EMPTY");
   await page.getByRole("button", { name: "Tambah kondisi" }).click();
   await expect(page.locator(`p[role="alert"]`)).toContainText("siklus");
+});
+
+async function openQuestion(page: Page, code: string) {
+  await page.locator("li", { has: page.locator("code", { hasText: new RegExp(`^${code}$`) }) }).last().getByRole("link", { name: /Ubah|Lihat/ }).click();
+}
+
+test("pratinjau per jenis, terbit + struktur terkunci, duplikat, salin periode [FR-06.09-06.11, FR-02.06, AC M06]", async ({ page }) => {
+  await loginSuperAdmin(page);
+  const periodName = await createQuestionnaire(page);
+  const builderUrl = page.url().split("?")[0];
+  await addSection(page, "Koleksi");
+  await addIntegerQuestion(page, "Koleksi", "Jumlah judul tercetak", "j_judul");
+  await addIntegerQuestion(page, "Koleksi", "Jumlah eksemplar tercetak", "j_eksemplar");
+
+  // soal khusus SD & SMP, wajib
+  await page.getByRole("link", { name: "+ Tambah soal di Koleksi" }).click();
+  await page.getByLabel("Teks soal").fill("Jumlah siswa");
+  await page.getByLabel(/Kode variabel/).fill("j_siswa");
+  await page.getByLabel("Sekolah Dasar").check();
+  await page.getByLabel("Sekolah Menengah Pertama").check();
+  await page.getByLabel("Wajib diisi").check();
+  await page.getByRole("button", { name: "Simpan soal" }).click();
+  await expect(flash(page)).toContainText("Soal j_siswa ditambahkan");
+
+  // aturan Blokir eksemplar ≥ judul
+  await openQuestion(page, "j_eksemplar");
+  await page.getByLabel("Jenis aturan").selectOption("COMPARE");
+  await page.getByLabel("Nilai soal ini harus").selectOption("GTE");
+  await page.getByLabel("Soal pembanding").selectOption({ label: "j_judul — Jumlah judul tercetak" });
+  await page.getByLabel("Pesan untuk peserta").fill("Eksemplar harus ≥ judul");
+  await page.getByRole("button", { name: "Tambah aturan" }).click();
+  await expect(page.getByText("Blokir · Perbandingan antarsoal ≥ j_judul")).toBeVisible();
+
+  // FR-06.11: duplikat soal
+  await page.goto(builderUrl);
+  await page.getByRole("button", { name: "Duplikat j_judul" }).click();
+  await expect(flash(page)).toContainText("Soal diduplikat");
+  await expect(page.getByText("j_judul_2", { exact: true })).toBeVisible();
+
+  // FR-06.09 + AC M06: sebagai TBM soal j_siswa tidak tampil dan tidak dihitung di progres
+  await page.getByRole("link", { name: "Pratinjau sebagai peserta" }).click();
+  await page.getByLabel("Lihat sebagai jenis").selectOption({ label: "Taman Bacaan Masyarakat" });
+  await page.getByRole("button", { name: "Tampilkan" }).click();
+  await expect(page.getByTestId("question-j_siswa")).toHaveCount(0);
+  await expect(page.getByTestId("survey-progress")).toContainText("0 dari 3 soal");
+  // AC M06: judul 3.914, eksemplar 3.000 → pesan admin di bawah soal, Kirim nonaktif
+  await page.getByLabel("Jumlah judul tercetak", { exact: true }).fill("3914");
+  await page.getByLabel("Jumlah eksemplar tercetak").fill("3000");
+  await expect(page.getByTestId("question-j_eksemplar")).toContainText("Harus diperbaiki: Eksemplar harus ≥ judul");
+  await expect(page.getByRole("button", { name: "Kirim (pratinjau)" })).toBeDisabled();
+  await page.getByLabel("Jumlah eksemplar tercetak").fill("4000");
+  await expect(page.getByRole("button", { name: "Kirim (pratinjau)" })).toBeEnabled();
+  await page.getByLabel("Lihat sebagai jenis").selectOption({ label: "Sekolah Dasar" });
+  await page.getByRole("button", { name: "Tampilkan" }).click();
+  await expect(page.getByTestId("question-j_siswa")).toBeVisible();
+
+  // FR-06.10: terbitkan
+  await page.goto(builderUrl);
+  await page.getByText("Terbitkan kuesioner", { exact: true }).click();
+  await page.getByRole("button", { name: "Ya, terbitkan" }).click();
+  await expect(flash(page)).toContainText("Kuesioner terbit dengan 4 soal");
+
+  // AC M06: ubah tipe soal setelah terbit ditolak server (payload dipalsukan melewati UI yang terkunci)
+  await openQuestion(page, "j_judul");
+  await expect(page.getByLabel("Tipe jawaban")).toBeDisabled();
+  await page.locator('input[name="payload"]').evaluate((el: HTMLInputElement) => {
+    el.value = JSON.stringify({ ...JSON.parse(el.value), type: "DECIMAL" });
+  });
+  await page.getByRole("button", { name: "Simpan teks bantuan" }).click();
+  await expect(page.locator('p[role="alert"]')).toContainText("strukturnya terkunci");
+
+  // teks bantuan tetap boleh diubah
+  await page.reload();
+  await page.getByLabel("Teks bantuan").fill("Hitung semua judul buku tercetak.");
+  await page.getByRole("button", { name: "Simpan teks bantuan" }).click();
+  await expect(flash(page)).toContainText("Teks bantuan disimpan");
+
+  // FR-02.06: salin periode ikut menyalin kuesioner sebagai Draf
+  await page.goto("/admin/periode");
+  await page.getByRole("link", { name: periodName }).click();
+  await page.getByLabel("Nama periode baru").fill(`${periodName} salinan`);
+  await page.getByLabel("Tanggal-jam buka baru (WIB)").fill(wib(400 * 24 * HOUR));
+  await page.getByLabel("Tanggal-jam tutup baru (WIB)").fill(wib(430 * 24 * HOUR));
+  await page.getByRole("button", { name: "Salin periode" }).click();
+  await expect(flash(page)).toContainText("termasuk kuesioner (Draf)");
+  await page.goto("/admin/kuesioner");
+  await expect(page.getByRole("row", { name: new RegExp(`${periodName} salinan`) })).toContainText("Draf · 4 soal");
 });

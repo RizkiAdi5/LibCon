@@ -165,8 +165,8 @@ export default async function DetailPeriodePage({
         <section className="space-y-3">
           <h2 className="font-semibold">Salin periode</h2>
           <p className="text-sm text-muted-foreground">
-            Hasil salinan berstatus Draf dengan pengaturan yang sama. Kuesioner dan skema skor akan ikut tersalin setelah
-            modul Kuesioner dan Skoring tersedia.
+            Hasil salinan berstatus Draf dengan pengaturan dan kuesioner (bagian, soal, aturan, logika tampil) yang sama;
+            jawaban tidak ikut. Skema skor akan ikut tersalin setelah modul Skoring tersedia.
           </p>
           <form action={copyPeriodAction} className="grid max-w-3xl gap-3 rounded-md border p-4 md:grid-cols-2">
             <input type="hidden" name="sourceId" value={period.id} />

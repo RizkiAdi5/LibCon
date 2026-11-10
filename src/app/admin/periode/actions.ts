@@ -9,6 +9,7 @@ import { requireRole, runAsUser } from "@/lib/auth/guard";
 import { formatWib } from "@/lib/date";
 import { effectiveClosesAt, MANUAL_TRANSITIONS, PERIOD_STATUS } from "@/lib/period";
 import { copyPeriodSchema, extensionSchema, periodSchema } from "@/lib/validation/period";
+import { copyQuestionnaireToPeriod } from "@/lib/questionnaireCopy";
 
 export type PeriodFormState = { error?: string; fieldErrors?: Record<string, string[]>; values?: Record<string, string> };
 
@@ -139,9 +140,9 @@ export async function addExtensionAction(formData: FormData) {
 }
 
 /**
- * FR-02.06: salin periode → DRAFT baru dengan tanggal baru dan pengaturan yang sama.
- * shortcut: kuesioner (bagian/soal/opsi/logika/aturan) dan skema skor BELUM ikut tersalin
- * karena modulnya belum ada — tambahkan di sini saat M06 & M09 dibuat (disetujui user).
+ * FR-02.06: salin periode → DRAFT baru dengan tanggal baru, pengaturan yang sama, dan
+ * kuesioner (bagian/soal/opsi/logika tampil/aturan) sebagai Draf. Jawaban tidak ikut.
+ * shortcut: skema skor BELUM ikut tersalin karena modulnya belum ada — tambahkan saat M09.
  */
 export async function copyPeriodAction(formData: FormData) {
   const user = await requireRole(["SUPER_ADMIN"]);
@@ -160,9 +161,9 @@ export async function copyPeriodAction(formData: FormData) {
   const source = await prisma.surveyPeriod.findFirst({ where: { id: sourceId.data, deletedAt: null } });
   if (!source) backTo("/admin/periode", { error: "Periode tidak ditemukan" });
 
-  const copy = await runAsUser(user, () =>
-    withDb((tx) =>
-      tx.surveyPeriod.create({
+  const { copy, questionnaire } = await runAsUser(user, () =>
+    withDb(async (tx) => {
+      const copy = await tx.surveyPeriod.create({
         data: {
           ...parsed.data,
           status: "DRAFT",
@@ -173,8 +174,11 @@ export async function copyPeriodAction(formData: FormData) {
           showRankingToParticipants: source.showRankingToParticipants,
           createdBy: user.id,
         },
-      }),
-    ),
+      });
+      return { copy, questionnaire: await copyQuestionnaireToPeriod(tx, source.id, copy.id, user.id) };
+    }),
   );
-  backTo(`/admin/periode/${copy.id}`, { ok: `Periode ${copy.name} dibuat sebagai salinan ${source.name} (Draf)` });
+  backTo(`/admin/periode/${copy.id}`, {
+    ok: `Periode ${copy.name} dibuat sebagai salinan ${source.name} (Draf)${questionnaire ? ", termasuk kuesioner (Draf)" : ""}`,
+  });
 }
