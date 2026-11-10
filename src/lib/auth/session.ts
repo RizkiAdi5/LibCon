@@ -48,6 +48,11 @@ export async function destroyAllSessionsForUser(tx: Db, userId: string): Promise
   await tx.session.deleteMany({ where: { userId } });
 }
 
+/** FR-04.06: ganti password dari menu Akun mengakhiri semua sesi lain, sesi saat ini tetap. */
+export async function destroyOtherSessions(tx: Db, userId: string, keepRawToken: string): Promise<void> {
+  await tx.session.deleteMany({ where: { userId, sessionTokenHash: { not: hashSessionToken(keepRawToken) } } });
+}
+
 export type SessionUser = {
   id: string;
   role: UserRole;

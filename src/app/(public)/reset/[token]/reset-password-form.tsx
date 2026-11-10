@@ -4,19 +4,10 @@ import { useActionState, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { checkPasswordPolicy, type PasswordRuleId } from "@/lib/auth/passwordPolicy";
+import { PasswordRules } from "@/components/password-rules";
+import { checkPasswordPolicy } from "@/lib/auth/passwordPolicy";
 import type { PasswordPolicy } from "@/lib/settings";
 import { resetPasswordAction, type ResetPasswordState } from "./actions";
-
-const RULE_LABELS: Record<PasswordRuleId, string> = {
-  minLength: "Minimal 10 karakter",
-  uppercase: "Mengandung huruf besar",
-  lowercase: "Mengandung huruf kecil",
-  number: "Mengandung angka",
-  symbol: "Mengandung simbol",
-  noNppOrInstitutionName: "Tidak memuat NPP/nama lembaga",
-  notCommon: "Bukan password umum",
-};
 
 const initialState: ResetPasswordState = {};
 
@@ -50,16 +41,7 @@ export function ResetPasswordForm({ token, policy }: { token: string; policy: Pa
           required
         />
       </div>
-      <ul className="space-y-1 text-sm">
-        {(Object.keys(RULE_LABELS) as PasswordRuleId[]).map((rule) => (
-          <li
-            key={rule}
-            className={check.failedRules.includes(rule) ? "text-muted-foreground" : "text-green-600"}
-          >
-            {check.failedRules.includes(rule) ? "○" : "✓"} {RULE_LABELS[rule]}
-          </li>
-        ))}
-      </ul>
+      <PasswordRules failedRules={check.failedRules} />
       {state.error && (
         <p role="alert" className="text-sm text-destructive">
           {state.error}
