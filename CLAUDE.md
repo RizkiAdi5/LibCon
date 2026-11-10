@@ -66,6 +66,17 @@ Karena 98 FK `*_by → users.id` (dan semua trigger/CHECK/partial-index Tahap 3)
 - **DB lokal yang sebenarnya dipakai = PostgreSQL 18 native Windows** (`C:\Program Files\PostgreSQL\18`, layanan di `localhost:5432`, user `postgres`), BUKAN kontainer Docker `libcon-pg` — kontainer itu juga map port 5432 tapi kalah oleh layanan native, jadi kosong. Untuk query manual: `& "C:\Program Files\PostgreSQL\18\bin\psql.exe" -h localhost -U postgres -d libcon`.
 - `next dev` di Windows kadang **tidak me-reload modul `src/lib` yang diubah** (HMR) — gejalanya e2e gagal dengan perilaku kode lama. Restart dev server sebelum menyimpulkan ada bug.
 
+## Builder kuesioner (Tahap 10, sudah diimplementasi & diuji)
+
+- Tidak ada migrasi skema; library baru dari tech stack: `@dnd-kit/core|sortable|utilities`, `mathjs`.
+- **Bug Tahap 3 diperbaiki** (migrasi `20261110080000_audit_composite_pk`, SQL murni): trigger `audit_logs` mengambil `record_id` dari kolom `id`, padahal `question_institution_types`, `score_node_edges`, `score_node_variables` ber-PK komposit → INSERT ditolak. Sekarang fallback ke kolom PK dari `pg_index` digabung `:`. **Migrasi SQL murni dibuat manual** (folder bertimestamp + `migration.sql`), lalu `prisma migrate deploy`.
+- **Mesin validasi** `src/lib/validation/engine.ts` (murni, klien & server) — SATU-SATUNYA tempat aturan dinilai; M07/M08 wajib memakainya, jangan menulis ulang. Jawaban dikunci per question id; soal tidak tampil/tidak berlaku tidak divalidasi; aturan yang datanya kosong = "tidak bisa dinilai" (bukan gagal). Link bukti dukung memakai kunci `evidence:section:<id>` / `evidence:question:<id>` (`evidenceKey()` di `survey-form.tsx`).
+- **Ekspresi bebas**: mathjs + whitelist node AST (`analyzeExpression`), tanpa `eval`; `OR/AND/NOT` gaya ERD diterima; `==`/`!=` diberi signature teks (mathjs bawaan gagal untuk `jenis != 'SD'`). Variabel = kode soal + `jenis` (kode jenis lembaga, dicadangkan). Kode soal wajib diawali huruf.
+- Setelah terbit, struktur terkunci di SERVER (`structureChanged`, bandingkan JSON berkunci terurut — jsonb mengubah urutan kunci): hanya teks bantuan soal, deskripsi & petunjuk bukti bagian, judul/petunjuk kuesioner, dan **pesan** aturan yang bisa diubah. Tidak ada batalkan terbit.
+- `SurveyForm`/`AnswerInput` (`src/components/survey/`) + `loadSurveyDefinition()` disiapkan untuk dipakai ulang portal M07.
+- Salin periode kini ikut menyalin kuesioner (Draf, `copied_from_id` diisi untuk YOY_CHANGE); skema skor masih `shortcut:` sampai M09.
+- e2e: dnd-kit punya live region ber-role `status` → flash pakai `p[role="status"]`; uji drag keyboard tunggu `networkidle` (hidrasi) + `aria-pressed`. Nama periode uji kuesioner TIDAK berawalan `E2E ` (fixture periode mengarsipkannya) dan diberi sufiks acak (tes paralel).
+
 ## Periode survei (Tahap 9, sudah diimplementasi & diuji)
 
 - **Kolom baru `survey_periods.passing_score DECIMAL(6,2) default 70`** (FR-02.08, tidak ada di ERD — disetujui user) + **partial unique index `survey_periods_single_open`** (FR-02.05). Migrasi `20261110040541_...` dibuat `--create-only`, 98 `DROP CONSTRAINT` dihapus manual, FK terverifikasi utuh. `app_settings.passing_score_threshold` global (seed) sekarang tidak dipakai periode.
