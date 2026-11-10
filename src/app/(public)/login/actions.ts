@@ -181,7 +181,7 @@ export async function loginAction(_prev: LoginState, formData: FormData): Promis
         return createSession(tx, { userId: user.id, role: user.role, ip, userAgent, createdBy: user.id });
       });
 
-      await setSessionCookie(rawSession, user.role);
+      await setSessionCookie(rawSession);
       redirect(user.role === "PARTICIPANT" ? "/portal/beranda" : "/admin/dashboard");
     },
   );
