@@ -66,6 +66,15 @@ Karena 98 FK `*_by → users.id` (dan semua trigger/CHECK/partial-index Tahap 3)
 - **DB lokal yang sebenarnya dipakai = PostgreSQL 18 native Windows** (`C:\Program Files\PostgreSQL\18`, layanan di `localhost:5432`, user `postgres`), BUKAN kontainer Docker `libcon-pg` — kontainer itu juga map port 5432 tapi kalah oleh layanan native, jadi kosong. Untuk query manual: `& "C:\Program Files\PostgreSQL\18\bin\psql.exe" -h localhost -U postgres -d libcon`.
 - `next dev` di Windows kadang **tidak me-reload modul `src/lib` yang diubah** (HMR) — gejalanya e2e gagal dengan perilaku kode lama. Restart dev server sebelum menyimpulkan ada bug.
 
+## Periode survei (Tahap 9, sudah diimplementasi & diuji)
+
+- **Kolom baru `survey_periods.passing_score DECIMAL(6,2) default 70`** (FR-02.08, tidak ada di ERD — disetujui user) + **partial unique index `survey_periods_single_open`** (FR-02.05). Migrasi `20261110040541_...` dibuat `--create-only`, 98 `DROP CONSTRAINT` dihapus manual, FK terverifikasi utuh. `app_settings.passing_score_threshold` global (seed) sekarang tidak dipakai periode.
+- Menu Periode: Super Admin ubah, Admin lihat. Tanggal diinput WIB lewat `parseWibDateTime`/`toWibInputValue` di `src/lib/date.ts`. Transisi manual `MANUAL_TRANSITIONS` (CLOSED bisa dibuka lagi kalau tanggal tutup belum lewat; ARCHIVED final).
+- Cron `/api/cron/period-status` (GET, `Authorization: Bearer $CRON_SECRET`, `vercel.json` tiap 5 menit — butuh Vercel Pro saat deploy). Perpanjangan **semua lembaga** menahan periode tetap OPEN; perpanjangan **khusus lembaga** tidak — M07 wajib mengunci tombol Kirim dengan `effectiveClosesAt(closesAt, extensions, institutionId)` dari `src/lib/period.ts`, bukan dengan `status`.
+- **Salin periode baru menyalin pengaturan periode** — kuesioner/soal/aturan/skema skor WAJIB ditambahkan ke `copyPeriodAction` saat M06/M09 dibuat (ada komentar `shortcut:`).
+- e2e periode `mode: "serial"` karena state global (satu OPEN); fixture `close-e2e-periods` mengarsipkan periode berawalan `E2E ` yang tersisa. Periode OPEN buatan manual (non-`E2E `) di DB lokal akan membuat tes ini gagal dengan pesan jelas.
+- **Setelah `prisma generate`, restart `next dev`** — server yang sedang jalan memegang Prisma Client lama (`Unknown argument ...`).
+
 ## Keamanan akun & akun kedua (Tahap 8, sudah diimplementasi & diuji)
 
 - **Batas percobaan (FR-04.09) dihitung per AKUN, bukan per IP** — keputusan user, menyimpang dari teks PRD (perlu diperbarui di PRD): 10 percobaan gagal dalam 3 menit (termasuk saat terkunci, dihitung dari `login_attempts`) → kunci 1 jam; 50 salah password sejak login berhasil terakhir (`users.failed_login_count`) → blokir dengan pesan "Hubungi admin", dibuka admin lewat "Buka blokir" (reset ke 0). Lupa password maks. 5 permintaan per akun per jam (hitung `auth_tokens` PASSWORD_RESET `created_by = SYSTEM`; reset oleh admin tidak dihitung), respons tetap sama. Angka di `app_settings.lockout_policy`, default `DEFAULT_LOCKOUT_POLICY` (di-merge, baris lama tanpa field baru tetap jalan). Kunci 5x/15 menit lama tetap berlaku. Tidak ada tabel baru.
