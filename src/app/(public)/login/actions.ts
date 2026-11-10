@@ -3,13 +3,14 @@
 import { randomUUID } from "node:crypto";
 import { redirect } from "next/navigation";
 import { z } from "zod";
-import { prisma } from "@/lib/db/client";
+import { prisma, type Db } from "@/lib/db/client";
 import { withDb } from "@/lib/db/withDb";
 import { runWithRequestContext } from "@/lib/db/requestContext";
 import { getClientMeta } from "@/lib/auth/guard";
 import { verifyPassword } from "@/lib/auth/password";
 import { createSession, setSessionCookie } from "@/lib/auth/session";
-import { getLockoutPolicy } from "@/lib/settings";
+import { getLockoutPolicy, type LockoutPolicy } from "@/lib/settings";
+import { burstLockUntil, isPermanentlyBlocked } from "@/lib/auth/loginThrottle";
 import { SYSTEM_USER_ID } from "@/lib/auth/constants";
 import { formatWib } from "@/lib/date";
 import { sendTemplateEmail } from "@/lib/email/send";
@@ -22,6 +23,28 @@ const loginSchema = z.object({
 export type LoginState = { error?: string };
 
 const GENERIC_ERROR: LoginState = { error: "NPP/email atau password salah" }; // FR-04.02
+const BLOCKED_ERROR: LoginState = {
+  error: "Akun diblokir karena terlalu banyak percobaan login gagal. Hubungi admin Perpustakaan Kota untuk membuka blokir.",
+};
+
+/** FR-04.09: percobaan gagal beruntun dalam jendela pendek → kunci lebih lama (lihat loginThrottle.ts). */
+async function applyBurstLock(
+  tx: Db,
+  user: { id: string; lockedUntil: Date | null },
+  policy: LockoutPolicy,
+): Promise<Date | null> {
+  const now = new Date();
+  const recentFailures = await tx.loginAttempt.count({
+    where: {
+      userId: user.id,
+      success: false,
+      createdAt: { gte: new Date(now.getTime() - policy.burstWindowMinutes * 60 * 1000) },
+    },
+  });
+  const until = burstLockUntil(recentFailures, now, user.lockedUntil, policy);
+  if (until) await tx.user.update({ where: { id: user.id }, data: { lockedUntil: until, updatedBy: SYSTEM_USER_ID } });
+  return until;
+}
 
 export async function loginAction(_prev: LoginState, formData: FormData): Promise<LoginState> {
   const parsed = loginSchema.safeParse({
@@ -51,20 +74,22 @@ export async function loginAction(_prev: LoginState, formData: FormData): Promis
         return GENERIC_ERROR;
       }
 
+      const lockoutPolicy = await getLockoutPolicy();
+      const failedAttempt = {
+        data: { usernameInput: identifier, userId: user.id, success: false, ipAddress: ip, userAgent, createdBy: SYSTEM_USER_ID },
+      };
+
+      if (isPermanentlyBlocked(user.failedLoginCount, lockoutPolicy)) {
+        await withDb((tx) => tx.loginAttempt.create(failedAttempt));
+        return BLOCKED_ERROR;
+      }
+
       if (user.lockedUntil && user.lockedUntil > new Date()) {
-        await withDb((tx) =>
-          tx.loginAttempt.create({
-            data: {
-              usernameInput: identifier,
-              userId: user.id,
-              success: false,
-              ipAddress: ip,
-              userAgent,
-              createdBy: SYSTEM_USER_ID,
-            },
-          }),
-        );
-        return { error: `Akun terkunci sampai ${formatWib(user.lockedUntil)}` }; // FR-04.03 AC
+        const extended = await withDb(async (tx) => {
+          await tx.loginAttempt.create(failedAttempt);
+          return applyBurstLock(tx, user, lockoutPolicy);
+        });
+        return { error: `Akun terkunci sampai ${formatWib(extended ?? user.lockedUntil)}` }; // FR-04.03 AC
       }
 
       if (user.status === "PENDING_ACTIVATION" || !user.passwordHash) {
@@ -85,28 +110,31 @@ export async function loginAction(_prev: LoginState, formData: FormData): Promis
 
       const passwordOk = await verifyPassword(user.passwordHash, password);
       if (!passwordOk) {
-        const lockoutPolicy = await getLockoutPolicy();
         const nextFailedCount = user.failedLoginCount + 1;
+        const willBlock = isPermanentlyBlocked(nextFailedCount, lockoutPolicy);
         const willLock = nextFailedCount >= lockoutPolicy.maxFailedAttempts;
         const lockedUntil = willLock
           ? new Date(Date.now() + lockoutPolicy.lockoutMinutes * 60 * 1000)
           : user.lockedUntil;
 
-        await withDb(async (tx) => {
-          await tx.loginAttempt.create({
-            data: {
-              usernameInput: identifier,
-              userId: user.id,
-              success: false,
-              ipAddress: ip,
-              userAgent,
-              createdBy: SYSTEM_USER_ID,
-            },
-          });
+        const burstUntil = await withDb(async (tx) => {
+          await tx.loginAttempt.create(failedAttempt);
           await tx.user.update({
             where: { id: user.id },
             data: { failedLoginCount: nextFailedCount, lockedUntil, updatedBy: SYSTEM_USER_ID },
           });
+          if (willBlock) {
+            await tx.activityLog.create({
+              data: {
+                userId: user.id,
+                actorRole: user.role,
+                activity: "ACCOUNT_LOCKED",
+                description: `Akun ${user.username} diblokir setelah ${nextFailedCount} kali salah password sejak login terakhir`,
+              },
+            });
+            return null;
+          }
+          const burst = await applyBurstLock(tx, { id: user.id, lockedUntil }, lockoutPolicy);
           if (willLock) {
             await tx.activityLog.create({
               data: {
@@ -119,14 +147,17 @@ export async function loginAction(_prev: LoginState, formData: FormData): Promis
             await sendTemplateEmail(tx, {
               key: "ACCOUNT_LOCKED",
               to: user.email,
-              variables: { tenggat: formatWib(lockedUntil!) },
+              variables: { tenggat: formatWib(burst ?? lockedUntil!) },
               createdBy: SYSTEM_USER_ID,
               userId: user.id,
             });
           }
+          return burst;
         });
 
-        return willLock ? { error: `Akun terkunci sampai ${formatWib(lockedUntil!)}` } : GENERIC_ERROR;
+        if (willBlock) return BLOCKED_ERROR;
+        const finalLock = burstUntil ?? (willLock ? lockedUntil : null);
+        return finalLock ? { error: `Akun terkunci sampai ${formatWib(finalLock)}` } : GENERIC_ERROR;
       }
 
       const rawSession = await withDb(async (tx) => {

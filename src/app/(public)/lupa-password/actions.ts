@@ -6,9 +6,9 @@ import { prisma } from "@/lib/db/client";
 import { withDb } from "@/lib/db/withDb";
 import { runWithRequestContext } from "@/lib/db/requestContext";
 import { getClientMeta } from "@/lib/auth/guard";
-import { issueAuthToken } from "@/lib/auth/token";
+import { sendPasswordReset } from "@/lib/auth/activation";
 import { SYSTEM_USER_ID } from "@/lib/auth/constants";
-import { sendTemplateEmail } from "@/lib/email/send";
+import { getLockoutPolicy } from "@/lib/settings";
 
 const schema = z.object({ identifier: z.string().min(1) });
 
@@ -37,18 +37,19 @@ export async function forgotPasswordAction(
 
       if (!user || user.deletedAt || user.status === "DISABLED") return GENERIC_SUCCESS;
 
-      await withDb(async (tx) => {
-        const raw = await issueAuthToken(tx, { userId: user.id, type: "PASSWORD_RESET", createdBy: SYSTEM_USER_ID });
-        const link = `${process.env.NEXT_PUBLIC_APP_URL}/reset/${raw}`;
-        await sendTemplateEmail(tx, {
-          key: "PASSWORD_RESET",
-          to: user.institution?.officialEmail ?? user.email,
-          variables: { nama_lembaga: user.institution?.libraryName ?? user.fullName, link },
-          createdBy: SYSTEM_USER_ID,
+      // FR-04.09 (per akun, keputusan Tahap 8): maks. N permintaan per jam; reset oleh admin tidak dihitung
+      const { resetRequestsPerHour } = await getLockoutPolicy();
+      const recentRequests = await prisma.authToken.count({
+        where: {
           userId: user.id,
-          institutionId: user.institutionId ?? undefined,
-        });
+          type: "PASSWORD_RESET",
+          createdBy: SYSTEM_USER_ID,
+          createdAt: { gte: new Date(Date.now() - 60 * 60 * 1000) },
+        },
       });
+      if (recentRequests >= resetRequestsPerHour) return GENERIC_SUCCESS; // tetap respons sama (FR-04.04)
+
+      await withDb((tx) => sendPasswordReset(tx, user, SYSTEM_USER_ID));
 
       return GENERIC_SUCCESS;
     },

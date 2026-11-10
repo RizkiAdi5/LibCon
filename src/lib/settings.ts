@@ -28,17 +28,29 @@ export const DEFAULT_PASSWORD_POLICY: PasswordPolicy = {
 export type LockoutPolicy = {
   maxFailedAttempts: number;
   lockoutMinutes: number;
+  // FR-04.09, keputusan user Tahap 8: dihitung per akun, bukan per IP
+  burstAttempts: number;
+  burstWindowMinutes: number;
+  burstLockMinutes: number;
+  permanentBlockAfter: number;
+  resetRequestsPerHour: number;
 };
 
 export const DEFAULT_LOCKOUT_POLICY: LockoutPolicy = {
   maxFailedAttempts: 5,
   lockoutMinutes: 15,
+  burstAttempts: 10, // 10 percobaan gagal dalam 3 menit → kunci 1 jam
+  burstWindowMinutes: 3,
+  burstLockMinutes: 60,
+  permanentBlockAfter: 50, // 50 salah password sejak login berhasil terakhir → blokir, buka oleh admin
+  resetRequestsPerHour: 5,
 };
 
 export function getPasswordPolicy() {
   return getAppSetting<PasswordPolicy>("password_policy", DEFAULT_PASSWORD_POLICY);
 }
 
-export function getLockoutPolicy() {
-  return getAppSetting<LockoutPolicy>("lockout_policy", DEFAULT_LOCKOUT_POLICY);
+export async function getLockoutPolicy(): Promise<LockoutPolicy> {
+  // baris lama di DB (seed Tahap 5) belum punya field burst/permanent — isi dari default
+  return { ...DEFAULT_LOCKOUT_POLICY, ...(await getAppSetting<Partial<LockoutPolicy>>("lockout_policy", {})) };
 }
