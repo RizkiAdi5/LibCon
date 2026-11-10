@@ -87,3 +87,87 @@ export const questionSchema = z
   });
 
 export type QuestionInput = z.infer<typeof questionSchema>;
+
+export const RULE_TYPE_LABEL = {
+  REQUIRED: "Wajib",
+  RANGE: "Rentang",
+  COMPARE: "Perbandingan antarsoal",
+  FORMAT: "Format (pola teks)",
+  YOY_CHANGE: "Perubahan dari tahun lalu",
+  EXPRESSION: "Ekspresi bebas",
+} as const;
+const COMPARE_OPS = ["EQ", "NEQ", "GT", "GTE", "LT", "LTE"] as const;
+
+/** FR-06.06 + parameter sesuai contoh ERD `validation_rules.params`. */
+export const ruleSchema = z
+  .object({
+    ruleType: z.enum(Object.keys(RULE_TYPE_LABEL) as (keyof typeof RULE_TYPE_LABEL)[], "Pilih jenis aturan"),
+    severity: z.enum(["BLOCK", "FLAG"], "Pilih tingkat"),
+    message: z.string().trim().min(1, "Pesan untuk peserta wajib diisi").max(500, "Pesan maks. 500 karakter"),
+    params: z.object({
+      min: z.number().nullable().optional(),
+      max: z.number().nullable().optional(),
+      op: z.enum(COMPARE_OPS).optional(),
+      other_question_id: z.string().optional(),
+      pattern: z.string().optional(),
+      max_pct: z.number().nullable().optional(),
+      expr: z.string().trim().optional(),
+    }),
+  })
+  .superRefine((r, ctx) => {
+    const p = r.params;
+    const issue = (key: string, message: string) => ctx.addIssue({ code: "custom", path: ["params", key], message });
+    if (r.ruleType === "RANGE") {
+      if (p.min == null && p.max == null) issue("min", "Isi min. atau maks.");
+      if (p.min != null && p.max != null && p.min > p.max) issue("max", "Maks. harus ≥ min.");
+    }
+    if (r.ruleType === "COMPARE") {
+      if (!p.op) issue("op", "Pilih operator");
+      if (!z.uuid().safeParse(p.other_question_id).success) issue("other_question_id", "Pilih soal pembanding");
+    }
+    if (r.ruleType === "FORMAT") {
+      try {
+        if (!p.pattern) throw new Error();
+        new RegExp(p.pattern);
+      } catch {
+        issue("pattern", "Pola teks tidak valid");
+      }
+    }
+    if (r.ruleType === "YOY_CHANGE" && !(p.max_pct != null && p.max_pct > 0)) issue("max_pct", "Persentase maks. harus > 0");
+    if (r.ruleType === "EXPRESSION" && !p.expr) issue("expr", "Ekspresi wajib diisi");
+  });
+
+export type RuleInput = z.infer<typeof ruleSchema>;
+
+/** Simpan hanya parameter milik jenis aturan itu (format ERD). */
+export function ruleParams(r: RuleInput): Record<string, unknown> {
+  const p = r.params;
+  switch (r.ruleType) {
+    case "RANGE":
+      return { ...(p.min != null && { min: p.min }), ...(p.max != null && { max: p.max }) };
+    case "COMPARE":
+      return { op: p.op, other_question_id: p.other_question_id };
+    case "FORMAT":
+      return { pattern: p.pattern };
+    case "YOY_CHANGE":
+      return { max_pct: p.max_pct };
+    case "EXPRESSION":
+      return { expr: p.expr };
+    default:
+      return {};
+  }
+}
+
+/** FR-06.05: logika tampil. Nilai IN dipisah koma; NOT_EMPTY tanpa nilai. */
+export const conditionSchema = z
+  .object({
+    dependsOnQuestionId: z.uuid("Pilih soal acuan"),
+    operator: z.enum([...COMPARE_OPS, "IN", "NOT_EMPTY"], "Pilih operator"),
+    value: z.string().trim(),
+    effect: z.enum(["SHOW", "REQUIRE"], "Pilih efek"),
+  })
+  .refine((c) => c.operator === "NOT_EMPTY" || c.value !== "", { message: "Nilai kondisi wajib diisi", path: ["value"] })
+  .transform((c) => ({
+    ...c,
+    value: c.operator === "NOT_EMPTY" ? null : c.operator === "IN" ? c.value.split(",").map((v) => v.trim()).filter(Boolean) : c.value,
+  }));

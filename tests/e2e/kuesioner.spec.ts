@@ -21,7 +21,7 @@ async function loginSuperAdmin(page: Page) {
 
 /** Periode Draf baru + kuesionernya. Nama TIDAK berawalan "E2E " — fixture periode.spec mengarsipkan itu. */
 async function createQuestionnaire(page: Page) {
-  const name = `Kuesioner Uji ${Date.now()}`;
+  const name = `Kuesioner Uji ${Date.now()}-${Math.random().toString(36).slice(2, 6)}`; // tes paralel bisa jalan di ms yang sama
   await page.goto("/admin/periode");
   await page.getByLabel("Nama periode").fill(name);
   await page.getByLabel("Tahun").fill("2026");
@@ -110,4 +110,60 @@ test("builder: bagian, soal per tipe, kode otomatis & unik, berlaku-untuk, uruta
     await page.reload();
     return sectionTitles(page);
   }).toEqual(["SDM", "Koleksi"]);
+});
+
+async function addIntegerQuestion(page: Page, section: string, label: string, code: string) {
+  await page.getByRole("link", { name: `+ Tambah soal di ${section}` }).click();
+  await page.getByLabel("Teks soal").fill(label);
+  await page.getByLabel(/Kode variabel/).fill(code);
+  await page.getByRole("button", { name: "Simpan soal" }).click();
+  await expect(flash(page)).toContainText(`Soal ${code} ditambahkan`);
+}
+
+test("aturan validasi + uji nilai + logika tampil tanpa siklus [FR-06.05, FR-06.06, AC M06]", async ({ page }) => {
+  await loginSuperAdmin(page);
+  await createQuestionnaire(page);
+  await addSection(page, "Koleksi");
+  await addIntegerQuestion(page, "Koleksi", "Jumlah judul tercetak", "j_judul");
+  await addIntegerQuestion(page, "Koleksi", "Jumlah eksemplar tercetak", "j_eksemplar");
+
+  // AC M06: aturan Blokir "eksemplar ≥ judul" — editor menunjukkan contoh gagal & lolos (FR-06.06)
+  await page.getByText("Jumlah eksemplar tercetak").locator("..").locator("..").getByRole("link", { name: "Ubah" }).click();
+  await page.getByLabel("Jenis aturan").selectOption("COMPARE");
+  await page.getByLabel("Nilai soal ini harus").selectOption("GTE");
+  await page.getByLabel("Soal pembanding").selectOption({ label: "j_judul — Jumlah judul tercetak" });
+  await page.getByLabel("Pesan untuk peserta").fill("Eksemplar harus lebih besar atau sama dengan judul");
+  await page.getByLabel("Nilai j_eksemplar").fill("3000");
+  await page.getByLabel("Nilai j_judul").fill("3914");
+  await expect(page.getByTestId("rule-test-result")).toContainText("Gagal — “Eksemplar harus lebih besar atau sama dengan judul”");
+  await page.getByLabel("Nilai j_eksemplar").fill("4000");
+  await expect(page.getByTestId("rule-test-result")).toContainText("Lolos");
+  await page.getByRole("button", { name: "Tambah aturan" }).click();
+  await expect(page.getByText("Blokir · Perbandingan antarsoal ≥ j_judul")).toBeVisible();
+
+  // ekspresi hanya boleh merujuk kode soal yang ada (FR-06.10) — dicek juga di server
+  await page.getByLabel("Jenis aturan").selectOption("EXPRESSION");
+  await page.getByLabel(/^Ekspresi/).fill("j_guru > 0");
+  await expect(page.getByText("Variabel tidak dikenal: j_guru")).toBeVisible();
+  await page.getByLabel(/^Ekspresi/).fill("j_eksemplar > 0 OR jenis != 'SD'");
+  await page.getByLabel("Tingkat").selectOption("FLAG");
+  await page.getByLabel("Pesan untuk peserta").fill("Eksemplar 0 untuk SD perlu dicek");
+  await page.getByRole("button", { name: "Tambah aturan" }).click();
+  await expect(page.getByText("Flag · Ekspresi bebas j_eksemplar > 0 OR jenis != 'SD'")).toBeVisible();
+
+  // FR-06.05: j_eksemplar tampil jika j_judul > 0
+  await page.getByLabel("Soal ini", { exact: true }).selectOption("SHOW");
+  await page.getByLabel("jika soal", { exact: true }).selectOption({ label: "j_judul" });
+  await page.getByLabel("operator", { exact: true }).selectOption("GT");
+  await page.getByLabel(/^nilai/).fill("0");
+  await page.getByRole("button", { name: "Tambah kondisi" }).click();
+  await expect(page.getByText("Tampil jika j_judul > 0")).toBeVisible();
+
+  // FR-06.10: j_judul bergantung pada j_eksemplar → siklus ditolak
+  await page.getByRole("link", { name: "← Builder kuesioner" }).click();
+  await page.getByText("Jumlah judul tercetak").locator("..").locator("..").getByRole("link", { name: "Ubah" }).click();
+  await page.getByLabel("jika soal", { exact: true }).selectOption({ label: "j_eksemplar" });
+  await page.getByLabel("operator", { exact: true }).selectOption("NOT_EMPTY");
+  await page.getByRole("button", { name: "Tambah kondisi" }).click();
+  await expect(page.locator(`p[role="alert"]`)).toContainText("siklus");
 });
