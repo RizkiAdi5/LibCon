@@ -104,6 +104,31 @@ export async function POST(request: Request) {
           return NextResponse.json({ token: raw, activationEmailSent: Boolean(email), sentTo: email?.toEmail });
         }
 
+        case "latest-email": {
+          const user = await prisma.user.findUniqueOrThrow({ where: { username: body.username } });
+          const email = await prisma.emailLog.findFirst({
+            where: { userId: user.id, template: { key: body.key } },
+            orderBy: { createdAt: "desc" },
+          });
+          return NextResponse.json({ sentTo: email?.toEmail ?? null, status: email?.status ?? null });
+        }
+
+        case "user-lock-state": {
+          const user = await prisma.user.findUniqueOrThrow({ where: { username: body.username } });
+          return NextResponse.json({ lockedUntil: user.lockedUntil, failedLoginCount: user.failedLoginCount });
+        }
+
+        // mempercepat uji blokir permanen (50 salah password) tanpa 49 kali login sungguhan
+        case "set-failed-login-count": {
+          await withDb((tx) =>
+            tx.user.update({
+              where: { username: body.username },
+              data: { failedLoginCount: body.count, lockedUntil: null, updatedBy: SYSTEM_USER_ID },
+            }),
+          );
+          return NextResponse.json({ ok: true });
+        }
+
         case "check-unauthorized-access-log": {
           const log = await prisma.activityLog.findFirst({
             where: { userId: body.userId, activity: "UNAUTHORIZED_ACCESS" },
