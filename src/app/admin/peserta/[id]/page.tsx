@@ -12,7 +12,7 @@ import { isPermanentlyBlocked } from "@/lib/auth/loginThrottle";
 import { accountAction, resendActivationAction, setInstitutionActiveAction } from "../actions";
 import { loadInstitutionFormOptions } from "../form-options";
 import { InstitutionForm } from "../institution-form";
-import { ACCOUNT_STATUS } from "../labels";
+import { ACCOUNT_STATUS } from "@/lib/accountStatus";
 
 export default async function DetailPesertaPage({
   params,

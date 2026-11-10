@@ -9,6 +9,46 @@ import { hashPassword, verifyPassword } from "@/lib/auth/password";
 import { checkPasswordPolicy } from "@/lib/auth/passwordPolicy";
 import { destroyOtherSessions, SESSION_COOKIE_NAME } from "@/lib/auth/session";
 import { getPasswordPolicy } from "@/lib/settings";
+import { accountRequestSchema, canRequestSecondAccount } from "@/lib/validation/accountRequest";
+
+export type AccountRequestState = { error?: string; success?: boolean };
+
+/** FR-05.01/02: ajukan akun kedua. institution_id SELALU dari sesi, bukan dari form. */
+export async function requestSecondAccountAction(
+  _prev: AccountRequestState,
+  formData: FormData,
+): Promise<AccountRequestState> {
+  const sessionUser = await requireRole(["PARTICIPANT"]);
+  const parsed = accountRequestSchema.safeParse({
+    fullName: formData.get("fullName"),
+    email: formData.get("email"),
+    reason: formData.get("reason"),
+  });
+  if (!parsed.success) return { error: parsed.error.issues[0].message };
+  const data = parsed.data;
+  const institutionId = sessionUser.institutionId!;
+
+  const [accountCount, pending, emailTaken, emailRequested] = await Promise.all([
+    prisma.user.count({ where: { institutionId, deletedAt: null } }),
+    prisma.accountRequest.findFirst({ where: { institutionId, status: "PENDING" } }),
+    prisma.user.findFirst({ where: { email: { equals: data.email, mode: "insensitive" } } }),
+    prisma.accountRequest.findFirst({ where: { email: { equals: data.email, mode: "insensitive" }, status: "PENDING" } }),
+  ]);
+  // AC M05 ("ditolak 409"): server action tidak punya kode HTTP — ditolak dengan pesan setara (disetujui user)
+  if (!canRequestSecondAccount({ accountCount, hasPendingRequest: Boolean(pending) })) {
+    return { error: "Lembaga sudah punya 2 akun atau masih ada permintaan yang menunggu persetujuan." };
+  }
+  if (emailTaken || emailRequested) return { error: "Email sudah terdaftar. Gunakan email lain." };
+
+  await runAsUser(sessionUser, () =>
+    withDb((tx) =>
+      tx.accountRequest.create({
+        data: { institutionId, requestedById: sessionUser.id, ...data, createdBy: sessionUser.id },
+      }),
+    ),
+  );
+  return { success: true };
+}
 
 const changePasswordSchema = z.object({
   oldPassword: z.string().min(1, "Password lama wajib diisi"),

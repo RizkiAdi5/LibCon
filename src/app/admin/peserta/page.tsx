@@ -9,7 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { FlashMessage } from "@/components/flash-message";
 import { bulkResendActivationAction } from "./actions";
-import { ACCOUNT_STATUS } from "./labels";
+import { ACCOUNT_STATUS } from "@/lib/accountStatus";
 
 type SearchParams = { q?: string; status?: string; arsip?: string; ok?: string; error?: string };
 
