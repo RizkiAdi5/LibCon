@@ -2,6 +2,7 @@ import Link from "next/link";
 import type { Prisma, UserStatus } from "@/generated/prisma/client";
 import { prisma } from "@/lib/db/client";
 import { requireRole } from "@/lib/auth/guard";
+import { getLockoutPolicy } from "@/lib/settings";
 import { groupInstitutions } from "@/lib/institutionGroups";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -17,7 +18,9 @@ export default async function PesertaPage({ searchParams }: { searchParams: Prom
   const { q = "", status = "", arsip, ok, error } = await searchParams;
   const query = q.trim();
   const accountStatus = status in ACCOUNT_STATUS ? (status as UserStatus) : undefined;
+  const showBlocked = status === "BLOCKED";
   const showInactive = arsip === "1";
+  const { permanentBlockAfter } = await getLockoutPolicy();
 
   // FR-03.08: pencarian NPP/nama + filter status akun utama; lembaga nonaktif dipisah (FR-03.10)
   const where: Prisma.InstitutionWhereInput = {
@@ -30,6 +33,8 @@ export default async function PesertaPage({ searchParams }: { searchParams: Prom
       ],
     }),
     ...(accountStatus && { users: { some: { isPrimary: true, deletedAt: null, status: accountStatus } } }),
+    // FR-04.09: akun (utama atau kedua) yang diblokir karena terlalu banyak salah password
+    ...(showBlocked && { users: { some: { deletedAt: null, failedLoginCount: { gte: permanentBlockAfter } } } }),
   };
 
   const institutions = await prisma.institution.findMany({
@@ -69,13 +74,14 @@ export default async function PesertaPage({ searchParams }: { searchParams: Prom
         </div>
         <div className="space-y-1">
           <Label htmlFor="status">Status akun</Label>
-          <select id="status" name="status" defaultValue={accountStatus ?? ""} className="h-9 rounded-md border px-2 text-sm">
+          <select id="status" name="status" defaultValue={accountStatus ?? (showBlocked ? "BLOCKED" : "")} className="h-9 rounded-md border px-2 text-sm">
             <option value="">Semua</option>
             {Object.entries(ACCOUNT_STATUS).map(([value, { label }]) => (
               <option key={value} value={value}>
                 {label}
               </option>
             ))}
+            <option value="BLOCKED">Diblokir (terlalu banyak percobaan gagal)</option>
           </select>
         </div>
         <label className="flex items-center gap-2 pb-2 text-sm">

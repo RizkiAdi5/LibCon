@@ -8,7 +8,7 @@ export type ActivationTarget = {
   email: string;
   fullName: string;
   institutionId: string | null;
-  institution: { libraryName: string; officialEmail: string } | null;
+  institution: { libraryName: string } | null;
 };
 
 /**
@@ -21,7 +21,9 @@ export async function sendActivation(tx: Db, user: ActivationTarget, actorId: st
   const raw = await issueAuthToken(tx, { userId: user.id, type: "ACTIVATION", createdBy: actorId });
   await sendTemplateEmail(tx, {
     key: "ACTIVATION",
-    to: user.institution?.officialEmail ?? user.email,
+    // email akun: akun utama selalu = email resmi lembaga (disinkron saat ubah lembaga),
+    // akun kedua = email pengisi kedua (FR-05.04, PRD §7 "Email akun")
+    to: user.email,
     variables: {
       nama_lembaga: user.institution?.libraryName ?? user.fullName,
       npp: user.username,
@@ -41,7 +43,7 @@ export async function sendPasswordReset(tx: Db, user: ActivationTarget, actorId:
   const raw = await issueAuthToken(tx, { userId: user.id, type: "PASSWORD_RESET", createdBy: actorId });
   await sendTemplateEmail(tx, {
     key: "PASSWORD_RESET",
-    to: user.institution?.officialEmail ?? user.email,
+    to: user.email,
     variables: {
       nama_lembaga: user.institution?.libraryName ?? user.fullName,
       link: `${process.env.NEXT_PUBLIC_APP_URL}/reset/${raw}`,

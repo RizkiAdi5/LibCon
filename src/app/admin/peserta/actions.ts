@@ -6,7 +6,8 @@ import { Prisma, type UserRole } from "@/generated/prisma/client";
 import { prisma } from "@/lib/db/client";
 import { withDb } from "@/lib/db/withDb";
 import { requireRole, runAsUser } from "@/lib/auth/guard";
-import { sendActivation } from "@/lib/auth/activation";
+import { sendActivation, sendPasswordReset } from "@/lib/auth/activation";
+import { destroyAllSessionsForUser } from "@/lib/auth/session";
 import {
   institutionSchema,
   type InstitutionFieldErrors,
@@ -239,6 +240,57 @@ export async function setInstitutionActiveAction(formData: FormData) {
   backTo(`/admin/peserta/${id}`, {
     ok: `${institution.libraryName} ${active ? "dipulihkan" : "dinonaktifkan. Akun lembaga ini tidak bisa login."}`,
   });
+}
+
+const ACCOUNT_ACTIONS = ["reset-password", "disable", "enable", "unblock"] as const;
+
+/**
+ * FR-04.07: reset password (kirim link, admin tidak pernah melihat password),
+ * nonaktifkan, aktifkan kembali, dan buka blokir akun peserta (FR-04.09).
+ */
+export async function accountAction(formData: FormData) {
+  const user = await requireRole(["ADMIN", "SUPER_ADMIN"]);
+  const parsed = z
+    .object({ userId: z.uuid(), action: z.enum(ACCOUNT_ACTIONS) })
+    .safeParse({ userId: formData.get("userId"), action: formData.get("action") });
+  if (!parsed.success) backTo("/admin/peserta", { error: "Aksi akun tidak valid" });
+  const { userId, action } = parsed.data;
+
+  const account = await prisma.user.findFirst({
+    where: { id: userId, role: "PARTICIPANT", deletedAt: null },
+    include: { institution: true },
+  });
+  if (!account) backTo("/admin/peserta", { error: "Akun tidak ditemukan" });
+  const path = `/admin/peserta/${account.institutionId}`;
+
+  if (action === "reset-password" && account.status !== "ACTIVE") {
+    backTo(path, { error: `Akun ${account.username} belum aktif atau dinonaktifkan — gunakan kirim ulang aktivasi.` });
+  }
+
+  await runAsUser(user, () =>
+    withDb(async (tx) => {
+      if (action === "reset-password") return sendPasswordReset(tx, account, user.id);
+      if (action === "unblock") {
+        await tx.user.update({
+          where: { id: account.id },
+          data: { failedLoginCount: 0, lockedUntil: null, updatedBy: user.id },
+        });
+        return;
+      }
+      // aktifkan kembali ke status sebelum dinonaktifkan: belum pernah aktivasi → tetap menunggu aktivasi
+      const status = action === "disable" ? "DISABLED" : account.activatedAt ? "ACTIVE" : "PENDING_ACTIVATION";
+      await tx.user.update({ where: { id: account.id }, data: { status, updatedBy: user.id } });
+      if (action === "disable") await destroyAllSessionsForUser(tx, account.id);
+    }),
+  );
+
+  const messages: Record<(typeof ACCOUNT_ACTIONS)[number], string> = {
+    "reset-password": `Link reset password dikirim ke ${account.email}. Password lama tetap berlaku sampai link dipakai.`,
+    disable: `Akun ${account.username} dinonaktifkan dan tidak bisa login.`,
+    enable: `Akun ${account.username} diaktifkan kembali.`,
+    unblock: `Blokir akun ${account.username} dibuka. Akun bisa login kembali.`,
+  };
+  backTo(path, { ok: messages[action] });
 }
 
 async function createInstitution(data: InstitutionInput, actorId: string): Promise<string> {

@@ -7,7 +7,9 @@ import { formatWib } from "@/lib/date";
 import { FlashMessage } from "@/components/flash-message";
 import { ConfirmAction } from "@/components/confirm-action";
 import { Button } from "@/components/ui/button";
-import { resendActivationAction, setInstitutionActiveAction } from "../actions";
+import { getLockoutPolicy } from "@/lib/settings";
+import { isPermanentlyBlocked } from "@/lib/auth/loginThrottle";
+import { accountAction, resendActivationAction, setInstitutionActiveAction } from "../actions";
 import { loadInstitutionFormOptions } from "../form-options";
 import { InstitutionForm } from "../institution-form";
 import { ACCOUNT_STATUS } from "../labels";
@@ -32,7 +34,11 @@ export default async function DetailPesertaPage({
   });
   if (!institution) notFound();
 
-  const { types, districts } = await loadInstitutionFormOptions(institution);
+  const [{ types, districts }, lockoutPolicy] = await Promise.all([
+    loadInstitutionFormOptions(institution),
+    getLockoutPolicy(),
+  ]);
+  const now = new Date();
   const isInactive = Boolean(institution.deletedAt);
 
   return (
@@ -80,18 +86,56 @@ export default async function DetailPesertaPage({
               <th className="py-1">Username</th>
               <th>Email</th>
               <th>Status</th>
+              <th>Aksi</th>
             </tr>
           </thead>
           <tbody>
-            {institution.users.map((account) => (
-              <tr key={account.id} className="border-t">
-                <td className="py-2">
-                  {account.username} {account.isPrimary && <span className="text-xs text-muted-foreground">(utama)</span>}
-                </td>
-                <td>{account.email}</td>
-                <td className={ACCOUNT_STATUS[account.status].className}>{ACCOUNT_STATUS[account.status].label}</td>
-              </tr>
-            ))}
+            {institution.users.map((account) => {
+              const blocked = isPermanentlyBlocked(account.failedLoginCount, lockoutPolicy);
+              const lockedUntil = account.lockedUntil && account.lockedUntil > now ? account.lockedUntil : null;
+              const button = (action: string, label: string) => (
+                <form action={accountAction}>
+                  <input type="hidden" name="userId" value={account.id} />
+                  <input type="hidden" name="action" value={action} />
+                  <Button type="submit" variant="outline" size="sm">
+                    {label}
+                  </Button>
+                </form>
+              );
+              return (
+                <tr key={account.id} className="border-t align-top">
+                  <td className="py-2">
+                    {account.username}{" "}
+                    {account.isPrimary && <span className="text-xs text-muted-foreground">(utama)</span>}
+                  </td>
+                  <td>{account.email}</td>
+                  <td>
+                    <span className={ACCOUNT_STATUS[account.status].className}>
+                      {ACCOUNT_STATUS[account.status].label}
+                    </span>
+                    {blocked && <p className="text-destructive">Diblokir: terlalu banyak percobaan gagal</p>}
+                    {!blocked && lockedUntil && (
+                      <p className="text-amber-700">Terkunci sampai {formatWib(lockedUntil)}</p>
+                    )}
+                  </td>
+                  <td className="flex flex-wrap gap-2 py-2">
+                    {account.status === "ACTIVE" && button("reset-password", "Reset password")}
+                    {(blocked || lockedUntil) && button("unblock", "Buka blokir")}
+                    {account.status === "DISABLED" ? (
+                      button("enable", "Aktifkan kembali")
+                    ) : (
+                      <ConfirmAction
+                        action={accountAction}
+                        fields={{ userId: account.id, action: "disable" }}
+                        label="Nonaktifkan akun"
+                        confirmLabel={`Ya, nonaktifkan ${account.username}`}
+                        impact="Akun ini langsung keluar dan tidak bisa login sampai diaktifkan kembali."
+                      />
+                    )}
+                  </td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
         {!isInactive && institution.users.some((u) => u.isPrimary && u.status === "PENDING_ACTIVATION") && (
