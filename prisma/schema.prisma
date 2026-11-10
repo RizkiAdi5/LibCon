@@ -740,6 +740,8 @@ model Submission {
   verifiedAt        DateTime?        @map("verified_at")
   verifiedById      String?          @map("verified_by") @db.Uuid
   adminNote         String?          @map("admin_note")
+  // FR-06.08 link bukti dukung per bagian: { [section_id]: url } — tidak ada di ERD, ditambah Tahap 11
+  sectionEvidence   Json             @default("{}") @map("section_evidence")
   createdAt         DateTime         @default(now()) @map("created_at")
   createdBy         String           @map("created_by") @db.Uuid
   updatedAt         DateTime         @updatedAt @map("updated_at")
