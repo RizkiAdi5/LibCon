@@ -10,6 +10,8 @@ import { requireRole, runAsUser } from "@/lib/auth/guard";
 import { validateScheme, type NormParams, type ThresholdRange } from "@/lib/formula/scoring";
 import { analyzeExpression, FORMULA_FUNCTIONS } from "@/lib/validation/engine";
 import { copyScheme, createPresetScheme, loadScheme, loadVariables } from "@/lib/scoringData";
+import { runOfficialScoring } from "@/lib/scoringRun";
+import { sendTemplateEmail } from "@/lib/email/send";
 
 const pathOf = (id: string) => `/admin/skoring/${id}`;
 const LOCKED = "Skema ini tidak berstatus Draf. Buat versi baru untuk mengubah rumus.";
@@ -294,4 +296,107 @@ export async function deleteCategoryAction(formData: FormData) {
     withDb((tx) => tx.scoreCategory.updateMany({ where: { id: id.data, schemeId: scheme.id }, data: { deletedAt: new Date(), deletedBy: user.id } })),
   );
   backTo(pathOf(scheme.id), { ok: "Kategori dihapus" });
+}
+
+/** FR-09.08/09.09: hitung (ulang) resmi semua kiriman Terverifikasi dengan skema Aktif. */
+export async function officialRunAction(formData: FormData) {
+  const user = await requireRole(["SUPER_ADMIN"]);
+  const id = uuid.safeParse(formData.get("schemeId"));
+  if (!id.success) backTo("/admin/skoring", { error: "Skema tidak valid" });
+  const path = `${pathOf(id.data)}/hitung`;
+  const scheme = await prisma.scoringScheme.findFirst({ where: { id: id.data, deletedAt: null } });
+  if (!scheme || scheme.status !== "ACTIVE") backTo(path, { error: "Hitung resmi hanya dengan skema berstatus Aktif." });
+
+  let result: { count: number };
+  try {
+    result = await runAsUser(user, async () => {
+      const r = await runOfficialScoring(scheme.id, user.id);
+      await withDb((tx) =>
+        tx.activityLog.create({
+          data: { userId: user.id, actorRole: user.role, activity: "RUN_SCORING", entityType: "scoring_scheme", entityId: scheme.id, description: `Hitung resmi ${scheme.name} v${scheme.version}: ${r.count} kiriman` },
+        }),
+      );
+      return r;
+    });
+  } catch (error) {
+    console.error("[skoring] hitung resmi gagal", error);
+    backTo(path, { error: "Hitung resmi gagal. Detail kesalahan tercatat di riwayat perhitungan." });
+  }
+  backTo(path, { ok: `Hitung resmi selesai: ${result.count} kiriman Terverifikasi diberi skor.` });
+}
+
+/** FR-09.11 + BR-16: publikasikan skor periode (Super Admin) + email ke semua akun lembaga yang punya skor. */
+export async function publishScoresAction(formData: FormData) {
+  const user = await requireRole(["SUPER_ADMIN"]);
+  const id = uuid.safeParse(formData.get("schemeId"));
+  if (!id.success) backTo("/admin/skoring", { error: "Skema tidak valid" });
+  const path = `${pathOf(id.data)}/hitung`;
+  const scheme = await prisma.scoringScheme.findFirst({ where: { id: id.data, deletedAt: null }, include: { period: true } });
+  if (!scheme) backTo("/admin/skoring", { error: "Skema tidak ditemukan" });
+  const scored = await prisma.submissionScore.findMany({
+    where: { isCurrent: true, submission: { periodId: scheme.periodId } },
+    include: { submission: { include: { institution: { include: { users: { where: { deletedAt: null, status: "ACTIVE" } } } } } } },
+  });
+  if (scored.length === 0) backTo(path, { error: "Belum ada skor resmi. Jalankan hitung resmi dulu." });
+
+  await runAsUser(user, () =>
+    withDb(async (tx) => {
+      await tx.surveyPeriod.update({
+        where: { id: scheme.periodId },
+        data: { scoresPublishedAt: new Date(), scoresPublishedById: user.id, updatedBy: user.id },
+      });
+      await tx.activityLog.create({
+        data: { userId: user.id, actorRole: user.role, activity: "PUBLISH_SCORES", entityType: "survey_period", entityId: scheme.periodId, description: `Publikasi skor ${scheme.period.name}` },
+      });
+    }),
+  );
+
+  // email di luar transaksi: publikasi tetap berlaku walau sebagian email gagal
+  let failed = 0;
+  for (const s of scored) {
+    for (const account of s.submission.institution.users) {
+      try {
+        await runAsUser(user, () =>
+          withDb((tx) =>
+            sendTemplateEmail(tx, {
+              key: "SCORE_PUBLISHED",
+              to: account.email,
+              variables: { nama_lembaga: s.submission.institution.libraryName, periode: scheme.period.name },
+              createdBy: user.id,
+              userId: account.id,
+              institutionId: s.submission.institutionId,
+              relatedType: "survey_period",
+              relatedId: scheme.periodId,
+            }),
+          ),
+        );
+      } catch (error) {
+        console.error("[skoring] email publikasi gagal", error);
+        failed++;
+      }
+    }
+  }
+  backTo(path, { ok: `Skor ${scheme.period.name} dipublikasikan ke ${scored.length} lembaga.${failed ? ` ${failed} email gagal dikirim.` : ""}` });
+}
+
+/** FR-09.11: tarik kembali publikasi dengan alasan. */
+export async function unpublishScoresAction(formData: FormData) {
+  const user = await requireRole(["SUPER_ADMIN"]);
+  const id = uuid.safeParse(formData.get("schemeId"));
+  if (!id.success) backTo("/admin/skoring", { error: "Skema tidak valid" });
+  const path = `${pathOf(id.data)}/hitung`;
+  const reason = z.string().trim().min(1, "Alasan penarikan wajib diisi").max(1000).safeParse(formData.get("reason") ?? "");
+  if (!reason.success) backTo(path, { error: reason.error.issues[0].message });
+  const scheme = await prisma.scoringScheme.findFirst({ where: { id: id.data, deletedAt: null } });
+  if (!scheme) backTo("/admin/skoring", { error: "Skema tidak ditemukan" });
+
+  await runAsUser(user, () =>
+    withDb((tx) =>
+      tx.surveyPeriod.update({
+        where: { id: scheme.periodId },
+        data: { scoresUnpublishedAt: new Date(), scoresUnpublishedById: user.id, scoresUnpublishReason: reason.data, updatedBy: user.id },
+      }),
+    ),
+  );
+  backTo(path, { ok: "Publikasi skor ditarik. Skor tidak lagi tampil ke peserta." });
 }
