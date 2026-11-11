@@ -210,6 +210,7 @@ test("pratinjau per jenis, terbit + struktur terkunci, duplikat, salin periode [
   await page.getByRole("link", { name: "Pratinjau sebagai peserta" }).click();
   await page.getByLabel("Lihat sebagai jenis").selectOption({ label: "Taman Bacaan Masyarakat" });
   await page.getByRole("button", { name: "Tampilkan" }).click();
+  await page.waitForLoadState("networkidle"); // input terkontrol: mengetik sebelum hidrasi bisa ter-reset React
   await expect(page.getByTestId("question-j_siswa")).toHaveCount(0);
   await expect(page.getByTestId("survey-progress")).toContainText("0 dari 3 soal");
   // AC M06: judul 3.914, eksemplar 3.000 → pesan admin di bawah soal, Kirim nonaktif

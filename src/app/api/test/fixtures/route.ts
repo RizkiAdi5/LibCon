@@ -161,6 +161,126 @@ export async function POST(request: Request) {
           return NextResponse.json({ ok: true });
         }
 
+        // M07: periode lalu (eksemplar 2.292) + periode OPEN dengan kuesioner terbit + peserta SD aktif
+        case "setup-open-survey": {
+          const stamp = randomUUID().slice(0, 8);
+          const past = new Date(Date.now() - 400 * 24 * 60 * 60 * 1000);
+          const region = await prisma.region.findFirstOrThrow({ where: { level: "VILLAGE" } });
+          const [sd, tbm] = await Promise.all([
+            prisma.institutionType.findFirstOrThrow({ where: { code: "SD" } }),
+            prisma.institutionType.findFirstOrThrow({ where: { code: "TBM" } }),
+          ]);
+          const passwordHash = await hashPassword(body.password);
+
+          const result = await withDb(async (tx) => {
+            await tx.surveyPeriod.updateMany({
+              where: { status: { in: ["DRAFT", "OPEN"] }, name: { startsWith: "E2E " } },
+              data: { status: "ARCHIVED", updatedBy: SYSTEM_USER_ID },
+            });
+            const otherOpen = await tx.surveyPeriod.findFirst({ where: { status: "OPEN", deletedAt: null } });
+            if (otherOpen) return { error: `Tutup dulu periode OPEN non-uji "${otherOpen.name}"` };
+
+            const institution = await tx.institution.create({
+              data: {
+                npp: `S${stamp}`,
+                libraryName: `Perpus Survei ${stamp}`,
+                institutionName: `SD Survei ${stamp}`,
+                typeId: sd.id,
+                regionId: region.id,
+                address: "Jl. Uji",
+                officialEmail: `survei-${stamp}@example.com`,
+                picName: "Pengisi",
+                createdBy: SYSTEM_USER_ID,
+              },
+            });
+            const user = await tx.user.create({
+              data: {
+                role: "PARTICIPANT",
+                institutionId: institution.id,
+                username: institution.npp,
+                email: institution.officialEmail,
+                fullName: "Pengisi",
+                passwordHash,
+                status: "ACTIVE",
+                isPrimary: true,
+                createdBy: SYSTEM_USER_ID,
+              },
+            });
+
+            // periode lalu: ARCHIVED, jawaban eksemplar 2.292 (AC M08)
+            const prevPeriod = await tx.surveyPeriod.create({
+              data: { name: `E2E Survei Lalu ${stamp}`, year: 2025, opensAt: past, closesAt: new Date(past.getTime() + 864e5), status: "ARCHIVED", createdBy: SYSTEM_USER_ID },
+            });
+            const prevQ = await tx.questionnaire.create({ data: { periodId: prevPeriod.id, title: "Lalu", status: "PUBLISHED", createdBy: SYSTEM_USER_ID } });
+            const prevSection = await tx.section.create({ data: { questionnaireId: prevQ.id, code: "koleksi", title: "Koleksi", createdBy: SYSTEM_USER_ID } });
+            const prevEksemplar = await tx.question.create({
+              data: { questionnaireId: prevQ.id, sectionId: prevSection.id, code: "j_eksemplar", label: "Jumlah eksemplar", type: "INTEGER", createdBy: SYSTEM_USER_ID },
+            });
+            const prevSubmission = await tx.submission.create({
+              data: { periodId: prevPeriod.id, institutionId: institution.id, status: "VERIFIED", createdBy: SYSTEM_USER_ID },
+            });
+            await tx.answer.create({ data: { submissionId: prevSubmission.id, questionId: prevEksemplar.id, valueNumber: 2292, createdBy: SYSTEM_USER_ID } });
+
+            // periode berjalan
+            const period = await tx.surveyPeriod.create({
+              data: {
+                name: `E2E Survei ${stamp}`,
+                year: 2026,
+                opensAt: new Date(Date.now() - 60 * 60 * 1000),
+                closesAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
+                status: "OPEN",
+                createdBy: SYSTEM_USER_ID,
+              },
+            });
+            const q = await tx.questionnaire.create({ data: { periodId: period.id, title: "Survei Uji", status: "PUBLISHED", createdBy: SYSTEM_USER_ID } });
+            const section = await tx.section.create({
+              data: { questionnaireId: q.id, code: "koleksi", title: "Koleksi", evidenceLabel: "Folder 01_Koleksi", evidenceRequired: true, createdBy: SYSTEM_USER_ID },
+            });
+            const mk = (code: string, label: string, sortOrder: number, extra: object = {}) =>
+              tx.question.create({ data: { questionnaireId: q.id, sectionId: section.id, code, label, type: "INTEGER", sortOrder, createdBy: SYSTEM_USER_ID, ...extra } });
+            const judul = await mk("j_judul", "Jumlah judul", 0, { isRequired: true });
+            const eksemplar = await mk("j_eksemplar", "Jumlah eksemplar", 1, { copiedFromId: prevEksemplar.id });
+            const siswa = await mk("j_siswa", "Jumlah siswa", 2, { isRequired: true });
+            const anggotaTbm = await mk("j_anggota_tbm", "Jumlah anggota TBM", 3);
+            await tx.questionInstitutionType.createMany({
+              data: [
+                { questionId: siswa.id, institutionTypeId: sd.id, createdBy: SYSTEM_USER_ID },
+                { questionId: anggotaTbm.id, institutionTypeId: tbm.id, createdBy: SYSTEM_USER_ID },
+              ],
+            });
+            await tx.validationRule.createMany({
+              data: [
+                { questionId: eksemplar.id, ruleType: "COMPARE", params: { op: "GTE", other_question_id: judul.id }, severity: "BLOCK", message: "Eksemplar harus ≥ judul", createdBy: SYSTEM_USER_ID },
+                { questionId: eksemplar.id, ruleType: "YOY_CHANGE", params: { max_pct: 50 }, severity: "FLAG", message: "Naik/turun > 50% dari tahun lalu", sortOrder: 1, createdBy: SYSTEM_USER_ID },
+              ],
+            });
+            return { username: user.username, periodName: period.name };
+          });
+          return NextResponse.json(result);
+        }
+
+        case "submission-state": {
+          const user = await prisma.user.findUniqueOrThrow({ where: { username: body.username } });
+          const submission = await prisma.submission.findFirst({
+            where: { institutionId: user.institutionId!, period: { status: { not: "ARCHIVED" } } },
+            include: {
+              validationResults: true,
+              snapshots: true,
+              answers: { include: { history: true } },
+            },
+          });
+          const receipts = await prisma.emailLog.count({ where: { institutionId: user.institutionId!, template: { key: "SUBMISSION_RECEIPT" } } });
+          return NextResponse.json({
+            status: submission?.status,
+            openFlagCount: submission?.openFlagCount,
+            flags: submission?.validationResults.map((v) => v.message) ?? [],
+            snapshots: submission?.snapshots.length ?? 0,
+            allLocked: submission?.answers.every((a) => a.isLocked) ?? false,
+            historyByUser: submission?.answers.flatMap((a) => a.history).every((h) => h.createdBy === user.id) ?? false,
+            receipts,
+          });
+        }
+
         case "check-unauthorized-access-log": {
           const log = await prisma.activityLog.findFirst({
             where: { userId: body.userId, activity: "UNAUTHORIZED_ACCESS" },
