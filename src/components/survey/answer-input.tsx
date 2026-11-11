@@ -1,10 +1,37 @@
 "use client";
 
+import { useState } from "react";
 import { Input } from "@/components/ui/input";
 import type { SurveyQuestion } from "@/lib/surveyDefinition";
+import { parseIdNumber } from "@/lib/answers";
 
-const num = (v: string) => (v.trim() === "" || Number.isNaN(Number(v)) ? null : Number(v));
 type Row = Record<string, string>;
+
+
+/** FR-07.07: angka & rupiah tampil dengan pemisah ribuan titik; saat diketik tampil apa adanya. */
+function NumberField({
+  value,
+  onChange,
+  decimals,
+  ...rest
+}: { value: number | null; onChange: (v: number | null) => void; decimals: boolean } & Omit<React.ComponentProps<typeof Input>, "value" | "onChange">) {
+  const [draft, setDraft] = useState<string | null>(null);
+  const shown = draft ?? (value === null || value === undefined ? "" : new Intl.NumberFormat("id-ID", { maximumFractionDigits: decimals ? 4 : 0 }).format(value));
+  return (
+    <Input
+      {...rest}
+      inputMode={decimals ? "decimal" : "numeric"}
+      className="w-48"
+      value={shown}
+      onFocus={() => setDraft(value === null || value === undefined ? "" : String(value).replace(".", ","))}
+      onChange={(e) => {
+        setDraft(e.target.value);
+        onChange(parseIdNumber(e.target.value));
+      }}
+      onBlur={() => setDraft(null)}
+    />
+  );
+}
 
 /** Input jawaban per tipe soal (PRD §5.5). Nilai: angka untuk tipe angka, string, string[] (pilihan ganda), Row[] (tabel). */
 export function AnswerInput({
@@ -31,12 +58,9 @@ export function AnswerInput({
       return (
         <div className="flex items-center gap-2">
           {q.type === "CURRENCY" && <span className="text-sm">Rp</span>}
-          <Input {...common} type="number" step={q.type === "DECIMAL" ? "any" : "1"} className="w-48" value={(value as number | null) ?? ""} onChange={(e) => onChange(num(e.target.value))} />
+          <NumberField {...common} decimals={q.type === "DECIMAL" || q.type === "PERCENT"} value={(value as number | null) ?? null} onChange={onChange} />
           {q.type === "PERCENT" && <span className="text-sm">%</span>}
           {c.unit && <span className="text-sm text-muted-foreground">{c.unit}</span>}
-          {q.type === "CURRENCY" && typeof value === "number" && (
-            <span className="text-sm text-muted-foreground">{new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR", maximumFractionDigits: 0 }).format(value)}</span>
-          )}
         </div>
       );
     case "SHORT_TEXT":

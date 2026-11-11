@@ -358,6 +358,14 @@ export function validateAnswers(input: {
   return { visible, required, issues };
 }
 
+/** FR-07.05: persen soal tampil yang sudah terisi (soal tidak berlaku tidak dihitung, AC M06). */
+export function progressPct(questions: EngineQuestion[], conditions: EngineCondition[], answers: Answers, institutionTypeId: string | null): number {
+  const { visible } = resolveVisibility(questions, conditions, answers, institutionTypeId);
+  if (visible.size === 0) return 0;
+  const answered = [...visible].filter((id) => !isEmpty(answers[id])).length;
+  return Math.round((answered / visible.size) * 10000) / 100;
+}
+
 /** FR-06.10: logika tampil tidak boleh membentuk siklus. Mengembalikan id soal di siklus pertama, atau null. */
 export function findConditionCycle(conditions: Pick<EngineCondition, "questionId" | "dependsOnQuestionId">[]): string[] | null {
   const deps = new Map<string, string[]>();
