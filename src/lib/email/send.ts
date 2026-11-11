@@ -6,6 +6,13 @@ function renderTemplate(body: string, variables: Record<string, string>): string
   return body.replace(/\{(\w+)\}/g, (match, key) => variables[key] ?? match);
 }
 
+const escapeHtml = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+
+/** Variabel berasal dari isian pengguna (nama lembaga, catatan admin) — escape untuk body HTML; baris baru jadi <br>. */
+export function htmlVariables(variables: Record<string, string>): Record<string, string> {
+  return Object.fromEntries(Object.entries(variables).map(([k, v]) => [k, escapeHtml(v).replace(/\r?\n/g, "<br>")]));
+}
+
 /**
  * Kirim email dari template di DB (FR-14.02), catat ke email_logs.
  * Retry 3x dengan jeda bertahap (PRD §7) sengaja BELUM diimplementasikan di
@@ -32,7 +39,7 @@ export async function sendTemplateEmail(
   }
 
   const subject = renderTemplate(template.subject, params.variables);
-  const html = renderTemplate(template.bodyHtml, params.variables);
+  const html = renderTemplate(template.bodyHtml, htmlVariables(params.variables));
 
   const log = await tx.emailLog.create({
     data: {
