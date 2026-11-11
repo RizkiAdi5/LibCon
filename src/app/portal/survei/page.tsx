@@ -3,6 +3,7 @@ import { requireRole } from "@/lib/auth/guard";
 import { formatWib } from "@/lib/date";
 import { loadParticipantSurvey } from "@/lib/participantSurvey";
 import { buttonVariants } from "@/components/ui/button";
+import { RevisionBanner } from "@/components/survey/revision-banner";
 import { SurveyFill } from "./survey-fill";
 
 export default async function SurveiPage() {
@@ -14,7 +15,9 @@ export default async function SurveiPage() {
     return <p className="text-sm">Survei {survey.period.name} dibuka {formatWib(survey.period.opensAt)}.</p>;
   }
 
-  const editable = survey.mode === "editable";
+  // FR-08.07: mode revisi = bisa mengisi, tapi hanya soal yang dibuka admin
+  const editable = survey.mode === "editable" || survey.mode === "revision";
+  const revisionNotes = survey.mode === "revision" ? Object.fromEntries(survey.revisionNotes) : undefined;
   return (
     <div className="space-y-4">
       <div>
@@ -23,6 +26,9 @@ export default async function SurveiPage() {
           {survey.period.name} · tenggat {formatWib(survey.effectiveClosesAt)}
         </p>
       </div>
+      {survey.mode === "revision" && survey.revision && (
+        <RevisionBanner deadlineAt={survey.revision.deadlineAt} generalNote={survey.revision.generalNote} count={survey.revisionNotes.size} />
+      )}
       {survey.mode === "submitted" && <p className="text-sm text-green-700">Survei sudah dikirim — jawaban terkunci dan hanya bisa dilihat.</p>}
       {survey.mode === "closed" && <p className="text-sm text-amber-700">Periode pengisian sudah ditutup. Isian bisa dilihat tapi tidak bisa diubah.</p>}
       {editable && (
@@ -37,6 +43,7 @@ export default async function SurveiPage() {
         initialAnswers={survey.answers}
         editable={editable}
         lastSavedAt={survey.submission?.lastSavedAt?.toISOString() ?? null}
+        revisionNotes={revisionNotes}
       />
       {editable && (
         <Link href="/portal/survei/ringkasan" className={buttonVariants()}>

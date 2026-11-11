@@ -81,6 +81,13 @@ describe("surveyMode [FR-07.02, BR-10, BR-12, AC M07]", () => {
   it("sudah dikirim → terkunci (BR-10)", () => {
     expect(surveyMode({ ...base, submissionStatus: "SUBMITTED" })).toBe("submitted");
   });
+
+  it("revisi terbuka → mode revisi walau periode sudah ditutup; lewat batas revisi → baca saja [FR-08.07, FR-08.09]", () => {
+    const revision = { ...base, periodStatus: "CLOSED" as const, submissionStatus: "NEEDS_REVISION" as const, now: new Date("2026-07-10T00:00:00Z") };
+    expect(surveyMode({ ...revision, revisionDeadline: new Date("2026-07-15T00:00:00Z") })).toBe("revision");
+    expect(surveyMode({ ...revision, revisionDeadline: new Date("2026-07-09T00:00:00Z") })).toBe("submitted");
+    expect(surveyMode({ ...revision, revisionDeadline: null })).toBe("submitted");
+  });
 });
 
 describe("pickPortalPeriod", () => {

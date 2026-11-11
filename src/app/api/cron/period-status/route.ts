@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { runWithRequestContext } from "@/lib/db/requestContext";
 import { SYSTEM_USER_ID } from "@/lib/auth/constants";
 import { runPeriodTransitions } from "@/lib/periodTransitions";
+import { expireRevisions } from "@/lib/revision";
 
 /** Vercel Cron memanggil GET dengan header `Authorization: Bearer $CRON_SECRET` (lihat vercel.json). */
 export async function GET(request: Request) {
@@ -13,7 +14,7 @@ export async function GET(request: Request) {
 
   const result = await runWithRequestContext(
     { userId: SYSTEM_USER_ID, requestId: randomUUID(), ip: null, userAgent: null, source: "CRON" },
-    () => runPeriodTransitions(),
+    async () => ({ ...(await runPeriodTransitions()), ...(await expireRevisions()) }),
   );
   return NextResponse.json(result);
 }

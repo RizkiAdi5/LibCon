@@ -23,6 +23,7 @@ export function SurveyFill({
   initialAnswers,
   editable,
   lastSavedAt,
+  revisionNotes,
 }: {
   periodId: string;
   definition: SurveyDefinition;
@@ -30,6 +31,7 @@ export function SurveyFill({
   initialAnswers: Answers;
   editable: boolean;
   lastSavedAt: string | null;
+  revisionNotes?: Record<string, string>;
 }) {
   const [answers, setAnswers] = useState(initialAnswers);
   const [status, setStatus] = useState<SaveStatus>(lastSavedAt ? { kind: "saved", at: lastSavedAt } : { kind: "idle" });
@@ -108,7 +110,7 @@ export function SurveyFill({
           {status.kind === "error" && <span className="text-destructive">Tidak tersimpan: {status.message}</span>}
         </p>
       )}
-      <SurveyForm definition={definition} institutionType={institutionType} answers={answers} onChange={onChange} disabled={!editable} participant />
+      <SurveyForm definition={definition} institutionType={institutionType} answers={answers} onChange={onChange} disabled={!editable} participant revisionNotes={revisionNotes} />
     </div>
   );
 }

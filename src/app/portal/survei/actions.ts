@@ -33,13 +33,19 @@ export async function saveAnswersAction(input: { periodId: string; changes: Reco
 
   const survey = await loadParticipantSurvey(institutionId);
   if (!survey || survey.period.id !== parsed.data.periodId) return { error: "Periode survei tidak ditemukan atau sudah berganti. Muat ulang halaman." };
-  if (survey.mode !== "editable") {
+  if (survey.mode !== "editable" && survey.mode !== "revision") {
     return { error: survey.mode === "submitted" ? "Survei sudah dikirim dan terkunci." : "Periode pengisian sudah ditutup. Isian tidak bisa diubah." };
   }
+  const revising = survey.mode === "revision";
 
   const typeId = survey.institution.typeId;
   const questions = new Map(survey.definition.sections.flatMap((s) => s.questions).map((q) => [q.id, q]));
-  const sectionIds = new Set(survey.definition.sections.map((s) => s.id));
+  // FR-08.07: saat revisi hanya soal yang dibuka (dan link bukti bagian berisi soal itu) yang boleh diubah
+  const editableQuestion = (id: string) => !revising || survey.revisionNotes.has(id);
+  const sectionIds = new Set(
+    survey.definition.sections.filter((s) => !revising || s.questions.some((q) => survey.revisionNotes.has(q.id))).map((s) => s.id),
+  );
+  const LOCKED_BY_REVISION = "Soal ini tidak dibuka untuk revisi — tidak perlu diubah.";
 
   // validasi seluruh perubahan dulu — tidak ada yang disimpan kalau satu saja tidak valid
   const answerWrites = new Map<string, StoredAnswer>();
@@ -51,18 +57,20 @@ export async function saveAnswersAction(input: { periodId: string; changes: Reco
       if (value !== null && (typeof value !== "string" || value.length > MAX_URL)) return { error: "Link bukti dukung tidak valid" };
       const url = (value as string | null)?.trim() || null;
       if (k.scope === "section") {
-        if (!sectionIds.has(k.id)) return { error: "Bagian tidak ditemukan" };
+        if (!sectionIds.has(k.id)) return { error: revising ? LOCKED_BY_REVISION : "Bagian tidak ditemukan" };
         if (url) sectionEvidence[k.id] = url;
         else delete sectionEvidence[k.id];
       } else {
         const q = questions.get(k.id);
         if (!q?.hasEvidenceUrl) return { error: "Soal tidak meminta link bukti" };
+        if (!editableQuestion(q.id)) return { error: LOCKED_BY_REVISION };
         evidenceWrites.set(k.id, url);
       }
       continue;
     }
     const q = questions.get(k.questionId);
     if (!q || (q.institutionTypeIds.length > 0 && !q.institutionTypeIds.includes(typeId))) return { error: "Soal tidak berlaku untuk lembaga ini" };
+    if (!editableQuestion(q.id)) return { error: `${q.label}: ${LOCKED_BY_REVISION}` };
     const stored = encodeAnswer(q.type, value);
     if ("error" in stored) return { error: `${q.label}: ${stored.error}` };
     answerWrites.set(q.id, stored);
@@ -86,7 +94,8 @@ export async function saveAnswersAction(input: { periodId: string; changes: Reco
           sectionEvidence,
           createdBy: user.id,
         },
-        update: { status: "DRAFT", progressPct: progress, lastSavedAt: now, sectionEvidence, updatedBy: user.id },
+        // saat revisi status tetap NEEDS_REVISION sampai dikirim ulang
+        update: { ...(revising ? {} : { status: "DRAFT" as const }), progressPct: progress, lastSavedAt: now, sectionEvidence, updatedBy: user.id },
       });
 
       for (const questionId of new Set([...answerWrites.keys(), ...evidenceWrites.keys()])) {
@@ -152,7 +161,7 @@ export async function submitSurveyAction(_prev: SubmitState, formData: FormData)
 
   const survey = await loadParticipantSurvey(user.institutionId!);
   if (!survey || survey.period.id !== parsed.data.periodId) return { error: "Periode survei sudah berganti. Muat ulang halaman." };
-  if (survey.mode !== "editable") {
+  if (survey.mode !== "editable" && survey.mode !== "revision") {
     return { error: survey.mode === "submitted" ? "Survei sudah dikirim." : "Periode pengisian sudah ditutup, survei tidak bisa dikirim." };
   }
   const check = await checkSubmission(survey);
@@ -163,8 +172,18 @@ export async function submitSurveyAction(_prev: SubmitState, formData: FormData)
   const now = new Date();
   const submission = survey.submission;
   const round = submission?.revisionRound ?? 0;
+  // FR-08.08: kirim ulang revisi — flag yang sudah diterima admin untuk soal+aturan yang sama tidak dibuka lagi
+  const accepted = submission
+    ? await prisma.validationResult.findMany({ where: { submissionId: submission.id, status: "ACCEPTED_BY_ADMIN" }, select: { questionId: true, ruleId: true } })
+    : [];
+  const flags = check.flags.filter((f) => !accepted.some((a) => a.questionId === f.questionId && a.ruleId === f.ruleId));
   await runAsUser(user, () =>
     withDb(async (tx) => {
+      if (survey.revision) {
+        await tx.revisionRequest.update({ where: { id: survey.revision.id }, data: { status: "RESUBMITTED", resubmittedAt: now, updatedBy: user.id } });
+        // flag putaran sebelumnya yang belum ditinjau digantikan hasil pemeriksaan putaran ini
+        await tx.validationResult.updateMany({ where: { submissionId: submission!.id, status: "OPEN" }, data: { status: "RESOLVED", updatedBy: user.id } });
+      }
       const saved = await tx.submission.upsert({
         where: { periodId_institutionId: { periodId: survey.period.id, institutionId: survey.institution.id } },
         create: {
@@ -176,7 +195,7 @@ export async function submitSurveyAction(_prev: SubmitState, formData: FormData)
           firstSubmittedAt: now,
           lastSubmittedAt: now,
           lastSubmittedById: user.id,
-          openFlagCount: check.flags.length,
+          openFlagCount: flags.length,
           createdBy: user.id,
         },
         update: {
@@ -186,7 +205,7 @@ export async function submitSurveyAction(_prev: SubmitState, formData: FormData)
           firstSubmittedAt: submission?.firstSubmittedAt ?? now,
           lastSubmittedAt: now,
           lastSubmittedById: user.id,
-          openFlagCount: check.flags.length,
+          openFlagCount: flags.length,
           updatedBy: user.id,
         },
       });
@@ -201,9 +220,9 @@ export async function submitSurveyAction(_prev: SubmitState, formData: FormData)
           createdBy: user.id,
         },
       });
-      if (check.flags.length) {
+      if (flags.length) {
         await tx.validationResult.createMany({
-          data: check.flags.map((f) => ({
+          data: flags.map((f) => ({
             submissionId: saved.id,
             questionId: f.questionId,
             ruleId: f.ruleId!, // flag selalu berasal dari aturan admin (cek bawaan tipe selalu Blokir)

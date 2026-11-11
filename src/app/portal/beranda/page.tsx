@@ -4,6 +4,7 @@ import { formatWib } from "@/lib/date";
 import { loadParticipantSurvey } from "@/lib/participantSurvey";
 import { SUBMISSION_STATUS } from "@/lib/submissionStatus";
 import { buttonVariants } from "@/components/ui/button";
+import { RevisionBanner } from "@/components/survey/revision-banner";
 
 const DAY = 24 * 60 * 60 * 1000;
 
@@ -46,12 +47,15 @@ export default async function PortalBerandaPage() {
               Tenggat {formatWib(survey.effectiveClosesAt)}
               {survey.mode === "editable" && <> — sisa {Math.ceil(msLeft / DAY)} hari</>}
             </p>
+            {survey.mode === "revision" && survey.revision && (
+              <RevisionBanner deadlineAt={survey.revision.deadlineAt} generalNote={survey.revision.generalNote} count={survey.revisionNotes.size} />
+            )}
             {survey.mode === "closed" && <p className="text-sm text-amber-700">Periode pengisian sudah ditutup. Isian hanya bisa dilihat.</p>}
             {survey.mode === "submitted" && survey.submission?.lastSubmittedAt && (
               <p className="text-sm text-green-700">Terkirim {formatWib(survey.submission.lastSubmittedAt)}.</p>
             )}
             <Link href="/portal/survei" className={buttonVariants()}>
-              {survey.mode === "editable" ? (survey.submission ? "Lanjutkan mengisi" : "Mulai mengisi") : "Lihat isian"}
+              {survey.mode === "revision" ? "Perbaiki soal revisi" : survey.mode === "editable" ? (survey.submission ? "Lanjutkan mengisi" : "Mulai mengisi") : "Lihat isian"}
             </Link>
           </>
         )}

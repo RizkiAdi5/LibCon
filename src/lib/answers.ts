@@ -74,20 +74,24 @@ export function parseAnswerKey(key: string): { kind: "answer"; questionId: strin
   return m ? { kind: "evidence", scope: m[1] as "section" | "question", id: m[2] } : { kind: "answer", questionId: key };
 }
 
-export type SurveyMode = "countdown" | "editable" | "submitted" | "closed";
+export type SurveyMode = "countdown" | "editable" | "revision" | "submitted" | "closed";
 
 /**
  * FR-07.02 + BR-10/BR-12: sebelum buka = hitung mundur; sudah dikirim = baca
  * saja; lewat tanggal tutup (termasuk perpanjangan lembaga ini) = baca saja.
+ * FR-08.07/08.09: revisi terbuka = hanya soal yang dibuka bisa diubah sampai
+ * batas revisi (terlepas dari tanggal tutup periode); lewat batas = baca saja.
  */
 export function surveyMode(p: {
   periodStatus: PeriodStatus;
   opensAt: Date;
   effectiveClosesAt: Date;
   submissionStatus: SubmissionStatus | null;
+  revisionDeadline?: Date | null;
   now: Date;
 }): SurveyMode {
   if (p.periodStatus === "DRAFT" || p.now < p.opensAt) return "countdown";
+  if (p.submissionStatus === "NEEDS_REVISION" && p.revisionDeadline && p.now < p.revisionDeadline && p.periodStatus !== "ARCHIVED") return "revision";
   if (p.submissionStatus && !["NOT_STARTED", "DRAFT"].includes(p.submissionStatus)) return "submitted";
   if (p.periodStatus === "ARCHIVED" || p.now >= p.effectiveClosesAt) return "closed";
   return "editable";

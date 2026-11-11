@@ -23,10 +23,15 @@ export async function loadParticipantSurvey(institutionId: string, now = new Dat
   const [submission, definition] = await Promise.all([
     prisma.submission.findUnique({
       where: { periodId_institutionId: { periodId: period.id, institutionId } },
-      include: { answers: true },
+      include: {
+        answers: true,
+        // BR-11: paling banyak satu revisi terbuka per kiriman (index unik Tahap 3)
+        revisionRequests: { where: { status: "OPEN" }, include: { items: true } },
+      },
     }),
     loadSurveyDefinition(period.questionnaire.id),
   ]);
+  const revision = submission?.revisionRequests[0] ?? null;
 
   const typeOf = new Map(definition.sections.flatMap((s) => s.questions).map((q) => [q.id, q.type]));
   const answers: Answers = {};
@@ -47,7 +52,17 @@ export async function loadParticipantSurvey(institutionId: string, now = new Dat
     submission,
     definition,
     answers,
-    mode: surveyMode({ periodStatus: period.status, opensAt: period.opensAt, effectiveClosesAt: closesAt, submissionStatus: submission?.status ?? null, now }),
+    revision,
+    // FR-08.07: soal yang dibuka revisi (id → catatan admin)
+    revisionNotes: new Map((revision?.items ?? []).map((i) => [i.questionId, i.note ?? ""])),
+    mode: surveyMode({
+      periodStatus: period.status,
+      opensAt: period.opensAt,
+      effectiveClosesAt: closesAt,
+      submissionStatus: submission?.status ?? null,
+      revisionDeadline: revision?.deadlineAt ?? null,
+      now,
+    }),
   };
 }
 

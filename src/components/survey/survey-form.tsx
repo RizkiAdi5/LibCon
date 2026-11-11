@@ -21,6 +21,7 @@ export function SurveyForm({
   onChange,
   disabled,
   participant,
+  revisionNotes,
 }: {
   definition: SurveyDefinition;
   institutionType: { id: string; code: string } | null;
@@ -28,6 +29,8 @@ export function SurveyForm({
   onChange: (key: string, value: unknown) => void;
   disabled?: boolean;
   participant?: boolean;
+  /** FR-08.07: hanya soal ini (id → catatan admin) yang bisa diubah saat revisi */
+  revisionNotes?: Record<string, string>;
 }) {
   const [touched, setTouched] = useState<Set<string>>(new Set());
   const questions = definition.sections.flatMap((s) => s.questions);
@@ -82,6 +85,8 @@ export function SurveyForm({
           </div>
           {sectionQuestions.map((q) => {
             const own = issues.filter((i) => i.questionId === q.id);
+            const opened = revisionNotes ? q.id in revisionNotes : true;
+            const locked = disabled || !opened;
             const msgId = own.length ? `msg-${q.id}` : undefined;
             return (
               <div
@@ -96,7 +101,13 @@ export function SurveyForm({
                   {required.has(q.id) && <span className="text-destructive"> *</span>}
                 </Label>
                 {q.helpText && <p className="text-sm text-muted-foreground">{q.helpText}</p>}
-                <AnswerInput question={q} value={answers[q.id]} onChange={(v) => onChange(q.id, v)} describedBy={msgId} disabled={disabled} />
+                {revisionNotes && opened && (
+                  <p className="rounded-md border border-amber-600/50 p-2 text-sm text-amber-800" data-testid={`revision-note-${q.code}`}>
+                    Perlu direvisi{revisionNotes[q.id] ? `: ${revisionNotes[q.id]}` : ""}
+                  </p>
+                )}
+                {revisionNotes && !opened && <p className="text-xs text-muted-foreground">Tidak perlu diubah</p>}
+                <AnswerInput question={q} value={answers[q.id]} onChange={(v) => onChange(q.id, v)} describedBy={msgId} disabled={locked} />
                 {own.length > 0 && (
                   <ul id={msgId} className="space-y-0.5 text-sm">
                     {own.map((i, n) => (
@@ -116,7 +127,7 @@ export function SurveyForm({
                       id={`ev-${q.id}`}
                       type="url"
                       placeholder="https://drive.google.com/..."
-                      disabled={disabled}
+                      disabled={locked}
                       value={(answers[evidenceKey("question", q.id)] as string) ?? ""}
                       onChange={(e) => onChange(evidenceKey("question", q.id), e.target.value)}
                     />
@@ -136,7 +147,7 @@ export function SurveyForm({
                 id={`ev-s-${section.id}`}
                 type="url"
                 placeholder="https://drive.google.com/..."
-                disabled={disabled}
+                disabled={disabled || (!!revisionNotes && !sectionQuestions.some((q) => q.id in revisionNotes))}
                 value={(answers[evidenceKey("section", section.id)] as string) ?? ""}
                 onChange={(e) => onChange(evidenceKey("section", section.id), e.target.value)}
               />

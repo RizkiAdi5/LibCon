@@ -42,7 +42,7 @@ export default async function RingkasanPage({ searchParams }: { searchParams: Pr
   if (!survey || survey.mode === "countdown") redirect("/portal/beranda");
   const check = await checkSubmission(survey);
   const sent = survey.mode === "submitted";
-  const editable = survey.mode === "editable";
+  const editable = survey.mode === "editable" || survey.mode === "revision";
   const problems = check.blocks.length + check.missingEvidence.length;
   const codeOf = new Map(survey.definition.sections.flatMap((s) => s.questions).map((q) => [q.id, q]));
 
