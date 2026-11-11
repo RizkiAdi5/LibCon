@@ -1,8 +1,28 @@
 import { prisma } from "./db/client";
 import { decodeAnswer, evidenceKey, pickPortalPeriod, surveyMode } from "./answers";
 import { effectiveClosesAt } from "./period";
-import { loadSurveyDefinition } from "./surveyDefinition";
+import { loadSurveyDefinition, type SurveyDefinition } from "./surveyDefinition";
 import { isEmpty, progressPct, validateAnswers, type Answers } from "./validation/engine";
+
+/** Baris `answers` + `submissions.section_evidence` → jawaban format mesin validasi (dipakai portal & verifikasi admin). */
+export function decodeSubmissionAnswers(
+  definition: SurveyDefinition,
+  rows: (Parameters<typeof decodeAnswer>[1] & { questionId: string; evidenceUrl: string | null })[],
+  sectionEvidence: unknown,
+): Answers {
+  const typeOf = new Map(definition.sections.flatMap((s) => s.questions).map((q) => [q.id, q.type]));
+  const answers: Answers = {};
+  for (const a of rows) {
+    const type = typeOf.get(a.questionId);
+    if (!type) continue; // soal yang sudah dihapus dari kuesioner
+    answers[a.questionId] = decodeAnswer(type, a);
+    if (a.evidenceUrl) answers[evidenceKey("question", a.questionId)] = a.evidenceUrl;
+  }
+  for (const [sectionId, url] of Object.entries((sectionEvidence ?? {}) as Record<string, string>)) {
+    answers[evidenceKey("section", sectionId)] = url;
+  }
+  return answers;
+}
 
 /**
  * Konteks survei portal untuk satu lembaga: periode yang tampil, kuesioner
@@ -33,17 +53,7 @@ export async function loadParticipantSurvey(institutionId: string, now = new Dat
   ]);
   const revision = submission?.revisionRequests[0] ?? null;
 
-  const typeOf = new Map(definition.sections.flatMap((s) => s.questions).map((q) => [q.id, q.type]));
-  const answers: Answers = {};
-  for (const a of submission?.answers ?? []) {
-    const type = typeOf.get(a.questionId);
-    if (!type) continue; // soal yang sudah dihapus dari kuesioner
-    answers[a.questionId] = decodeAnswer(type, a);
-    if (a.evidenceUrl) answers[evidenceKey("question", a.questionId)] = a.evidenceUrl;
-  }
-  for (const [sectionId, url] of Object.entries((submission?.sectionEvidence ?? {}) as Record<string, string>)) {
-    answers[evidenceKey("section", sectionId)] = url;
-  }
+  const answers = decodeSubmissionAnswers(definition, submission?.answers ?? [], submission?.sectionEvidence);
 
   return {
     institution,

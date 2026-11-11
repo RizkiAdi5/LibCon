@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { decodeAnswer, encodeAnswer, parseAnswerKey, parseIdNumber, pickPortalPeriod, surveyMode } from "@/lib/answers";
+import { decodeAnswer, diffAnswers, encodeAnswer, parseAnswerKey, parseIdNumber, pickPortalPeriod, surveyMode } from "@/lib/answers";
 
 describe("encodeAnswer / decodeAnswer", () => {
   it("angka → value_number, bolak-balik", () => {
@@ -39,6 +39,19 @@ describe("parseIdNumber [FR-07.07]", () => {
     expect(parseIdNumber("1.5")).toBe(1.5);
     expect(parseIdNumber("")).toBeNull();
     expect(parseIdNumber("abc")).toBeNull();
+  });
+});
+
+describe("diffAnswers [FR-08.10]", () => {
+  it("menandai nilai yang berubah antar versi; kosong vs tidak ada dianggap sama", () => {
+    const diff = diffAnswers(["a", "b", "c", "d"], { a: 3000, b: "x", c: "" }, { a: 4000, b: "x", d: null });
+    expect(diff.map((d) => [d.questionId, d.changed])).toEqual([
+      ["a", true],
+      ["b", false],
+      ["c", false],
+      ["d", false],
+    ]);
+    expect(diff[0]).toMatchObject({ before: 3000, after: 4000 });
   });
 });
 

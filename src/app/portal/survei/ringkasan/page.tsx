@@ -4,36 +4,8 @@ import { requireRole } from "@/lib/auth/guard";
 import { formatWib } from "@/lib/date";
 import { evidenceKey } from "@/lib/answers";
 import { checkSubmission, loadParticipantSurvey } from "@/lib/participantSurvey";
-import type { SurveyQuestion } from "@/lib/surveyDefinition";
-import { isEmpty } from "@/lib/validation/engine";
+import { formatAnswer } from "@/lib/answerFormat";
 import { SubmitForm } from "./submit-form";
-
-const fmt = new Intl.NumberFormat("id-ID", { maximumFractionDigits: 4 });
-
-function formatAnswer(q: SurveyQuestion, value: unknown): string {
-  if (isEmpty(value)) return "";
-  const label = (v: unknown) => q.options.find((o) => o.value === v)?.label ?? String(v);
-  switch (q.type) {
-    case "INTEGER":
-    case "DECIMAL":
-    case "SCALE":
-      return `${fmt.format(value as number)}${q.config.unit ? ` ${q.config.unit}` : ""}`;
-    case "CURRENCY":
-      return `Rp ${fmt.format(value as number)}`;
-    case "PERCENT":
-      return `${fmt.format(value as number)}%`;
-    case "SINGLE_CHOICE":
-    case "DROPDOWN":
-    case "YES_NO":
-      return label(value);
-    case "MULTI_CHOICE":
-      return (value as string[]).map(label).join(", ");
-    case "TABLE":
-      return `${(value as unknown[]).length} baris`;
-    default:
-      return String(value);
-  }
-}
 
 /** FR-07.08: semua jawaban per bagian, soal kosong, error Blokir dengan link ke soal. */
 export default async function RingkasanPage({ searchParams }: { searchParams: Promise<{ terkirim?: string }> }) {

@@ -67,6 +67,17 @@ export function parseIdNumber(text: string): number | null {
   return Number.isFinite(n) ? n : null;
 }
 
+/** FR-08.10: bandingkan dua versi jawaban (snapshot) per soal; `changed` untuk disorot. */
+export function diffAnswers(questionIds: string[], before: Record<string, unknown>, after: Record<string, unknown>) {
+  const norm = (v: unknown) => (v === undefined || v === "" || (Array.isArray(v) && v.length === 0) ? null : v);
+  return questionIds.map((id) => ({
+    questionId: id,
+    before: norm(before[id]),
+    after: norm(after[id]),
+    changed: JSON.stringify(norm(before[id])) !== JSON.stringify(norm(after[id])),
+  }));
+}
+
 /** Kunci jawaban link bukti dukung — dibagi klien & server. */
 export const evidenceKey = (scope: "section" | "question", id: string) => `evidence:${scope}:${id}`;
 export function parseAnswerKey(key: string): { kind: "answer"; questionId: string } | { kind: "evidence"; scope: "section" | "question"; id: string } {
