@@ -259,6 +259,18 @@ export async function POST(request: Request) {
           return NextResponse.json(result);
         }
 
+        // mempercepat uji skoring: verifikasi kiriman (alur UI verifikasi sudah diuji di survei.spec)
+        case "force-verify": {
+          const user = await prisma.user.findUniqueOrThrow({ where: { username: body.username } });
+          await withDb((tx) =>
+            tx.submission.updateMany({
+              where: { institutionId: user.institutionId!, status: "SUBMITTED", period: { status: { not: "ARCHIVED" } } },
+              data: { status: "VERIFIED", verifiedAt: new Date(), updatedBy: SYSTEM_USER_ID },
+            }),
+          );
+          return NextResponse.json({ ok: true });
+        }
+
         case "submission-state": {
           const user = await prisma.user.findUniqueOrThrow({ where: { username: body.username } });
           const submission = await prisma.submission.findFirst({

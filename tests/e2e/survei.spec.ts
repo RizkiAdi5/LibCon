@@ -222,3 +222,138 @@ test("admin: flag ikon merah → minta revisi 2 soal → peserta revisi & kirim 
 
   await fixture(page, { action: "close-e2e-periods" });
 });
+
+async function loginSuperAdmin(page: Page) {
+  const { username } = await fixture(page, { action: "create-active-admin", role: "SUPER_ADMIN", password: TEST_PASSWORD });
+  await page.goto("/login");
+  await page.getByLabel("NPP atau email").fill(username);
+  await page.getByLabel("Password").fill(TEST_PASSWORD);
+  await page.getByRole("button", { name: "Masuk" }).click();
+  await expect(page).toHaveURL(/\/admin\/dashboard/);
+}
+
+async function fillAndSubmit(page: Page, v: { judul: string; eksemplar: string; siswa: string }) {
+  await page.goto("/portal/survei");
+  await page.waitForLoadState("networkidle");
+  await savedAfter(page, async () => {
+    await answer(page, "Jumlah judul *", v.judul);
+    await answer(page, "Jumlah eksemplar", v.eksemplar);
+    await answer(page, "Jumlah siswa *", v.siswa);
+    await answer(page, "Link bukti dukung bagian Koleksi *", "https://drive.google.com/drive/folders/uji");
+  });
+  await submitSurvey(page, "Pengisi");
+}
+
+const flash = (page: Page) => page.locator('p[role="status"]');
+
+async function addNode(page: Page, n: { level: string; code: string; name: string; formula: string; normalization: string; target?: string }) {
+  const form = page.locator("section", { has: page.getByRole("heading", { name: "Tambah node" }) });
+  await form.getByLabel("Level").selectOption(n.level);
+  await form.getByLabel("Kode node").fill(n.code);
+  await form.getByLabel("Nama node").fill(n.name);
+  await form.getByLabel("Rumus node baru").fill(n.formula);
+  await form.getByLabel("Normalisasi").selectOption(n.normalization);
+  if (n.target) await form.getByLabel("Target (rasio terhadap target)").fill(n.target);
+  await form.getByRole("button", { name: "Tambah node" }).click();
+  await expect(flash(page)).toContainText(`Node ${n.code} disimpan`);
+}
+
+async function connect(page: Page, parentCode: string, parentName: string, childLabel: string, weight: string) {
+  const card = page.getByTestId(`node-${parentCode}`);
+  await card.getByLabel(`Anak baru untuk ${parentName}`, { exact: true }).selectOption({ label: childLabel });
+  await card.getByLabel(`Bobot anak baru untuk ${parentName}`).fill(weight);
+  await card.getByRole("button", { name: "Hubungkan" }).click();
+  await expect(flash(page)).toContainText("Bobot disimpan");
+}
+
+async function setWeight(page: Page, label: string, weight: string) {
+  await page.getByLabel(label).fill(weight);
+  await page.getByLabel(label).press("Enter");
+  await expect(flash(page)).toContainText("Bobot disimpan");
+}
+
+test("skoring: preset 30/70 → validasi bobot → aktifkan → uji → hitung resmi + ranking → publikasi → versi baru & hitung ulang [FR-09.01-09.11, AC M09]", async ({ page, browser }) => {
+  const { username: a, periodName } = await fixture(page, { action: "setup-open-survey", password: TEST_PASSWORD });
+  await login(page, a);
+  await fillAndSubmit(page, { judul: "3914", eksemplar: "8000", siswa: "120" });
+  const other = await freshPage(browser);
+  const { username: b } = await fixture(other, { action: "create-active-participant", password: TEST_PASSWORD });
+  await login(other, b);
+  await fillAndSubmit(other, { judul: "1000", eksemplar: "2000", siswa: "400" });
+  await fixture(page, { action: "force-verify", username: a });
+  await fixture(page, { action: "force-verify", username: b });
+
+  const admin = await freshPage(browser);
+  await loginSuperAdmin(admin);
+  await admin.goto("/admin/skoring");
+  await admin.getByRole("button", { name: `Buat skema baru (preset 30/70) untuk ${periodName}` }).click();
+  await expect(flash(admin)).toContainText("Skema dibuat dari preset 30/70");
+  const problems = admin.getByTestId("scheme-problems");
+  await expect(problems).toContainText("Kepatuhan belum punya node anak.");
+
+  // indikator: rasio eksemplar per siswa (target 10) & jumlah judul (min-max antar peserta)
+  await addNode(admin, { level: "INDICATOR", code: "i_rasio", name: "Rasio eksemplar per siswa", formula: "j_eksemplar / j_siswa", normalization: "TARGET_RATIO", target: "10" });
+  await addNode(admin, { level: "INDICATOR", code: "i_judul", name: "Jumlah judul", formula: "j_judul", normalization: "MIN_MAX" });
+  await connect(admin, "dim_kepatuhan", "Kepatuhan", "Indikator: Rasio eksemplar per siswa", "100");
+  await connect(admin, "dim_kinerja", "Kinerja", "Indikator: Jumlah judul", "100");
+  for (const code of ["sub_koleksi", "sub_sdm", "sub_pelayanan", "sub_pengelolaan"]) {
+    const card = admin.getByTestId(`node-${code}`);
+    await card.getByText("Hapus node", { exact: true }).click();
+    await card.getByRole("button", { name: `Ya, hapus ${code}` }).click();
+    await expect(flash(admin)).toContainText("Node dihapus");
+  }
+
+  // AC M09: bobot Kinerja 60% → ditolak dengan pesan total bobot
+  await setWeight(admin, "Bobot Kinerja di Indeks Dasar", "60");
+  await expect(problems).toContainText("Total bobot Indeks Dasar 90%, harus 100%");
+  await expect(admin.getByText("Aktifkan skema", { exact: true })).toHaveCount(0);
+  await setWeight(admin, "Bobot Kinerja di Indeks Dasar", "70");
+  await expect(problems).toContainText("Skema lolos validasi");
+  await admin.getByText("Aktifkan skema", { exact: true }).click();
+  await admin.getByRole("button", { name: "Ya, aktifkan" }).click();
+  await expect(flash(admin)).toContainText("Skema aktif");
+  const schemeV1 = admin.url().split("?")[0];
+
+  // FR-09.07: uji rumus — A: rasio 66,7 → 1; judul tertinggi → 1 ⇒ 100
+  await admin.getByRole("link", { name: "Uji & hitung skor" }).click();
+  const optionA = await admin.locator("#uji option", { hasText: "Perpus Survei" }).getAttribute("value");
+  await admin.getByLabel("Kiriman").selectOption(optionA!);
+  await admin.getByRole("button", { name: "Uji" }).click();
+  await expect(admin.getByTestId("test-result")).toContainText("Indeks: 100,00");
+  await expect(admin.getByTestId("official-scores")).toHaveCount(0); // uji tidak menyimpan skor resmi
+
+  // FR-09.08: hitung resmi — B: rasio 5 → 0,5; judul terendah → 0 ⇒ 0,3 × 0,5 × 100 = 15
+  await admin.getByText("Hitung resmi", { exact: true }).click();
+  await admin.getByRole("button", { name: "Ya, hitung resmi" }).click();
+  await expect(flash(admin)).toContainText("Hitung resmi selesai: 2 kiriman");
+  const scores = admin.getByTestId("official-scores");
+  await expect(scores.getByRole("row", { name: /Perpus Survei/ })).toContainText("100,00");
+  await expect(scores.getByRole("row", { name: /Perpus Survei/ })).toContainText("Lolos Nasional");
+  await expect(scores.getByRole("row", { name: /Perpus E2E/ })).toContainText("15,00");
+  await expect(scores.getByRole("row", { name: /Perpus E2E/ })).toContainText("Belum Lolos");
+  await expect(scores.getByRole("row", { name: /Perpus E2E/ }).getByRole("cell").first()).toHaveText("2");
+
+  // FR-09.11: publikasi
+  await admin.getByText("Publikasikan skor", { exact: true }).click();
+  await admin.getByRole("button", { name: "Ya, publikasikan" }).click();
+  await expect(flash(admin)).toContainText("dipublikasikan ke 2 lembaga");
+
+  // FR-09.09 + AC M09: rumus diubah lewat versi baru → hitung ulang; skor lama tetap di riwayat dengan versinya
+  await admin.goto(schemeV1);
+  await admin.getByRole("button", { name: "Buat versi baru (Draf)" }).click();
+  await expect(flash(admin)).toContainText("Skema versi 2 dibuat");
+  await setWeight(admin, "Bobot Kepatuhan di Indeks Dasar", "50");
+  await setWeight(admin, "Bobot Kinerja di Indeks Dasar", "50");
+  await admin.getByText("Aktifkan skema", { exact: true }).click();
+  await admin.getByRole("button", { name: "Ya, aktifkan" }).click();
+  await admin.getByRole("link", { name: "Uji & hitung skor" }).click();
+  await admin.getByText("Hitung resmi", { exact: true }).click();
+  await admin.getByRole("button", { name: "Ya, hitung resmi" }).click();
+  await expect(flash(admin)).toContainText("Hitung resmi selesai");
+  await expect(scores.getByRole("row", { name: /Perpus E2E/ })).toContainText("25,00"); // 0,5 × 0,5 × 100
+  await expect(scores.getByRole("row", { name: /Perpus E2E/ })).toContainText("v2");
+  await expect(admin.getByText(/v1 · Resmi · Selesai · 2 kiriman/)).toBeVisible();
+  await expect(admin.getByText(/v2 · Resmi · Selesai · 2 kiriman/)).toBeVisible();
+
+  await fixture(page, { action: "close-e2e-periods" });
+});

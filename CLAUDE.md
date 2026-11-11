@@ -66,6 +66,16 @@ Karena 98 FK `*_by → users.id` (dan semua trigger/CHECK/partial-index Tahap 3)
 - **DB lokal yang sebenarnya dipakai = PostgreSQL 18 native Windows** (`C:\Program Files\PostgreSQL\18`, layanan di `localhost:5432`, user `postgres`), BUKAN kontainer Docker `libcon-pg` — kontainer itu juga map port 5432 tapi kalah oleh layanan native, jadi kosong. Untuk query manual: `& "C:\Program Files\PostgreSQL\18\bin\psql.exe" -h localhost -U postgres -d libcon`.
 - `next dev` di Windows kadang **tidak me-reload modul `src/lib` yang diubah** (HMR) — gejalanya e2e gagal dengan perilaku kode lama. Restart dev server sebelum menyimpulkan ada bug.
 
+## Mesin skoring (Tahap 13, sudah diimplementasi & diuji)
+
+- Tidak ada migrasi. Mesin murni `src/lib/formula/scoring.ts` (`validateScheme`, `computeScores`, `normalize`, `rankBy`, `pickCategory`) — SATU-SATUNYA tempat skor dihitung. Rumus memakai whitelist mathjs yang sama dengan validasi (`analyzeExpression(..., FORMULA_FUNCTIONS)` + `evaluateNumber`); `MIN/MAX/IF/SUM/AVG/ROUND` gaya PRD dinormalisasi ke mathjs (`AVG`→`mean`, `IF`→`ifelse`).
+- **Keputusan (tanpa juknis Q2):** jawaban kosong / bagi nol → nilai indikator 0 (rincian mencatat "tidak ada data"); min-max saat semua sama → 1; tabel ambang [min, max), baris terakhir boleh tanpa batas atas; OPTION_SCORE = rumus satu kode soal pilihan, pilihan ganda dijumlah; ranking kompetisi (1,1,3); indeks = normalized akar × `scale`, dibulatkan 2 desimal (AC: 0,865/0,858 → 86,01).
+- Preset (`createPresetScheme`): Indeks Dasar ← Kepatuhan 0,30 / Kinerja 0,70 + 4 subdimensi tak terhubung + kategori dari `passing_score` periode — **sengaja belum bisa diaktifkan** sampai indikator diisi (juknis Q2).
+- Skema DRAFT saja yang bisa diubah; ACTIVE/ARCHIVED terkunci → ubah lewat "versi baru" (`copyScheme`). Aktivasi mengarsipkan ACTIVE lain di periode & mengisi `score_node_variables`. Salin periode ikut menyalin skema ACTIVE (shortcut Tahap 9 sudah ditutup).
+- Hitung resmi (`runOfficialScoring`, `src/lib/scoringRun.ts`): hanya skema ACTIVE, hanya kiriman VERIFIED (BR-13); `is_current` lama dimatikan untuk SEMUA kiriman periode lalu skor baru dibuat (kiriman yang batal diverifikasi tidak lagi punya skor berlaku). Uji rumus tidak menyimpan apa pun (tidak membuat `score_runs` TEST).
+- Publikasi: `survey_periods.scores_published_*`; tarik dengan alasan → `scores_unpublished_*`; status publikasi = `scoresPublished()` (`submissionReview.ts`). Halaman "Skor Saya" peserta (PRD §5.11) **belum dibuat**.
+- e2e skoring ada di `survei.spec.ts` (serial, butuh periode OPEN) — jangan buat spec terpisah yang juga membuat periode OPEN.
+
 ## Validasi & revisi (Tahap 12, sudah diimplementasi & diuji)
 
 - **Kolom baru `validation_results.review_note`** (FR-08.04, tidak ada di ERD; migrasi `20261111012904_...`). Alasan batal verifikasi (FR-08.12) disimpan di `submissions.admin_note` + jejak `audit_logs` (tidak ada kolom khusus).
