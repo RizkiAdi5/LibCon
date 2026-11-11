@@ -133,3 +133,92 @@ test("periode ditutup & tidak diperpanjang → isian bisa dilihat tapi tidak bis
   // bersihkan: arsipkan periode uji supaya tidak menahan slot OPEN
   await fixture(page, { action: "close-e2e-periods" });
 });
+
+async function loginAdmin(page: Page) {
+  const { username } = await fixture(page, { action: "create-active-admin", role: "ADMIN", password: TEST_PASSWORD });
+  await page.goto("/login");
+  await page.getByLabel("NPP atau email").fill(username);
+  await page.getByLabel("Password").fill(TEST_PASSWORD);
+  await page.getByRole("button", { name: "Masuk" }).click();
+  await expect(page).toHaveURL(/\/admin\/dashboard/);
+}
+
+async function submitSurvey(page: Page, name: string) {
+  await page.goto("/portal/survei/ringkasan");
+  await expect(page.getByTestId("blocking-issues")).toHaveCount(0);
+  await page.getByLabel(/Saya menyatakan data yang diisi sudah benar/).check();
+  await page.getByLabel("Nama pengisi").fill(name);
+  await page.getByRole("button", { name: "Kirim survei" }).click();
+  await expect(page.locator('p[role="status"]')).toContainText("Survei berhasil dikirim");
+}
+
+test("admin: flag ikon merah → minta revisi 2 soal → peserta revisi & kirim ulang → bandingkan versi → terima flag → verifikasi [FR-08.02-08.11, AC M08]", async ({ page, browser }) => {
+  const { username } = await fixture(page, { action: "setup-open-survey", password: TEST_PASSWORD });
+  await login(page, username);
+  await page.goto("/portal/survei");
+  await page.waitForLoadState("networkidle");
+  await savedAfter(page, async () => {
+    await answer(page, "Jumlah judul *", "3914");
+    await answer(page, "Jumlah eksemplar", "8000"); // naik > 50% dari 2.292 → Flag
+    await answer(page, "Jumlah siswa *", "120");
+    await answer(page, "Link bukti dukung bagian Koleksi *", "https://drive.google.com/drive/folders/uji");
+  });
+  await submitSurvey(page, "Budi");
+
+  // FR-08.02 + AC M08: kiriman dengan 1 flag dan ikon merah di daftar admin
+  const admin = await freshPage(browser);
+  await loginAdmin(admin);
+  await admin.goto(`/admin/verifikasi?q=${username}`);
+  const row = admin.getByRole("row", { name: /Perpus Survei/ });
+  await expect(row.getByTestId("flag-count")).toContainText("1 flag");
+  await row.getByRole("link").click();
+  await expect(admin.getByTestId("review-j_eksemplar")).toContainText("Naik/turun > 50% dari tahun lalu");
+
+  // FR-08.05: buka revisi untuk 2 soal dengan catatan
+  await admin.getByText("Minta revisi", { exact: true }).click();
+  await admin.getByLabel("Buka revisi Jumlah judul").check();
+  await admin.getByLabel("Buka revisi Jumlah eksemplar").check();
+  await admin.getByLabel("Catatan revisi Jumlah eksemplar").fill("Cek ulang buku induk");
+  await admin.getByLabel("Catatan umum").fill("Mohon dicek kembali data koleksi");
+  await admin.getByRole("button", { name: "Buka revisi & kirim email" }).click();
+  await expect(admin.locator('p[role="status"]')).toContainText("Revisi dibuka untuk 2 soal");
+
+  // AC M08: beranda banner revisi, 2 soal bisa diedit dengan catatan, soal lain terkunci
+  await page.goto("/portal/beranda");
+  await expect(page.getByTestId("revision-banner")).toContainText("Perlu revisi: 2 soal");
+  await expect(page.getByTestId("revision-banner")).toContainText("Mohon dicek kembali data koleksi");
+  await page.getByRole("link", { name: "Perbaiki soal revisi" }).click();
+  await page.waitForLoadState("networkidle");
+  await expect(page.getByTestId("revision-note-j_eksemplar")).toContainText("Cek ulang buku induk");
+  await expect(page.getByLabel("Jumlah siswa *", { exact: true })).toBeDisabled();
+  await expect(page.getByTestId("question-j_siswa")).toContainText("Tidak perlu diubah");
+  await savedAfter(page, async () => {
+    await answer(page, "Jumlah judul *", "3500");
+    await answer(page, "Jumlah eksemplar", "4000");
+  });
+  await submitSurvey(page, "Budi");
+
+  // FR-08.10 + AC M08: versi 1 dan 2 berdampingan, nilai yang berubah disorot
+  await admin.reload();
+  const compare = admin.getByTestId("version-compare");
+  await expect(compare.locator('tr[data-changed="true"]')).toHaveCount(2);
+  await expect(compare.getByRole("row", { name: /Jumlah eksemplar/ })).toContainText("8.000");
+  await expect(compare.getByRole("row", { name: /Jumlah eksemplar/ })).toContainText("4.000");
+  await expect(compare.getByRole("row", { name: /Jumlah siswa/ })).toHaveAttribute("data-changed", "false");
+
+  // FR-08.04: terima flag putaran baru dengan catatan; FR-08.11: verifikasi
+  const flagRow = admin.getByTestId("review-j_eksemplar");
+  await flagRow.getByLabel(/Catatan terima flag/).first().fill("Ada hibah buku tahun ini");
+  await flagRow.getByRole("button", { name: "Terima" }).first().click();
+  await expect(admin.locator('p[role="status"]')).toContainText("Flag ditandai Diterima");
+  await admin.getByText("Verifikasi kiriman", { exact: true }).click();
+  await admin.getByRole("button", { name: "Ya, verifikasi" }).click();
+  await expect(admin.locator('p[role="status"]')).toContainText("Terverifikasi");
+
+  const state = await fixture(page, { action: "submission-state", username });
+  expect(state.status).toBe("VERIFIED");
+  expect(state.openFlagCount).toBe(0);
+  expect(state.snapshots).toBe(2);
+
+  await fixture(page, { action: "close-e2e-periods" });
+});

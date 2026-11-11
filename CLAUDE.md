@@ -66,6 +66,15 @@ Karena 98 FK `*_by → users.id` (dan semua trigger/CHECK/partial-index Tahap 3)
 - **DB lokal yang sebenarnya dipakai = PostgreSQL 18 native Windows** (`C:\Program Files\PostgreSQL\18`, layanan di `localhost:5432`, user `postgres`), BUKAN kontainer Docker `libcon-pg` — kontainer itu juga map port 5432 tapi kalah oleh layanan native, jadi kosong. Untuk query manual: `& "C:\Program Files\PostgreSQL\18\bin\psql.exe" -h localhost -U postgres -d libcon`.
 - `next dev` di Windows kadang **tidak me-reload modul `src/lib` yang diubah** (HMR) — gejalanya e2e gagal dengan perilaku kode lama. Restart dev server sebelum menyimpulkan ada bug.
 
+## Validasi & revisi (Tahap 12, sudah diimplementasi & diuji)
+
+- **Kolom baru `validation_results.review_note`** (FR-08.04, tidak ada di ERD; migrasi `20261111012904_...`). Alasan batal verifikasi (FR-08.12) disimpan di `submissions.admin_note` + jejak `audit_logs` (tidak ada kolom khusus).
+- `surveyMode` punya mode **`revision`**: NEEDS_REVISION + revisi OPEN + sebelum `deadline_at` (terlepas dari tanggal tutup periode). Autosave & kirim di server menolak soal yang tidak dibuka (`survey.revisionNotes`). Membuka revisi: `revision_round` naik, jawaban soal terbuka `is_locked=false`. Kirim ulang: revisi RESUBMITTED, flag OPEN lama → RESOLVED, flag yang sudah ACCEPTED untuk soal+aturan sama tidak dibuat ulang, snapshot putaran baru.
+- Cron `/api/cron/period-status` juga memanggil `expireRevisions()` (`src/lib/revision.ts`): lewat batas → EXPIRED, kiriman kembali SUBMITTED, jawaban dikunci.
+- Verifikasi hanya dari SUBMITTED; batal verifikasi hanya selama `scoresPublished(period)` false (`src/lib/submissionReview.ts`). Halaman detail mencatat `VIEW_SUBMISSION` di `activity_logs`.
+- **Email**: `sendTemplateEmail` kini meng-escape semua variabel di body HTML (`htmlVariables`), baris baru → `<br>`. Jangan sisipkan HTML lewat variabel; pakai `\n`.
+- Shared: `formatAnswer` (`src/lib/answerFormat.ts`), `decodeSubmissionAnswers` (`participantSurvey.ts`), `diffAnswers` (`answers.ts`, FR-08.10).
+
 ## Pengisian survei portal (Tahap 11, sudah diimplementasi & diuji)
 
 - **Kolom baru `submissions.section_evidence jsonb`** (`{section_id: url}`) — link bukti dukung per bagian tidak punya tempat di ERD. Migrasi `20261110081809_...` (`--create-only`, 98 DROP dihapus).
