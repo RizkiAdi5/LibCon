@@ -19,24 +19,35 @@ math.import(
   },
   { override: false },
 );
+// FR-09.03: IF(kondisi, a, b) untuk rumus skor (dievaluasi tanpa eval, hanya lewat whitelist di bawah)
+math.import({ ifelse: (cond: unknown, a: unknown, b: unknown) => (cond ? a : b) });
 
 const ALLOWED_OPERATORS = new Set([
   "add", "subtract", "multiply", "divide", "mod", "unaryMinus", "unaryPlus",
   "larger", "largerEq", "smaller", "smallerEq", "equal", "unequal", "and", "or", "not",
 ]);
 const ALLOWED_FUNCTIONS = new Set(["abs", "min", "max", "round", "floor", "ceil", "sqrt"]);
+/** FR-09.03: rumus skor juga boleh SUM, AVG, IF. */
+export const FORMULA_FUNCTIONS = new Set([...ALLOWED_FUNCTIONS, "sum", "mean", "ifelse"]);
 const MAX_EXPRESSION_LENGTH = 500;
+const FUNCTION_ALIASES: Record<string, string> = { MIN: "min", MAX: "max", SUM: "sum", AVG: "mean", ROUND: "round", IF: "ifelse", ABS: "abs" };
 
-/** ERD menulis `OR`/`AND`; mathjs hanya kenal huruf kecil. */
+/** ERD menulis `OR`/`AND`, PRD menulis `MIN`/`IF`/`AVG`; mathjs hanya kenal huruf kecil (`AVG` = `mean`). */
 function normalizeExpression(expr: string): string {
-  return expr.replace(/\b(AND|OR|NOT)\b/g, (k) => k.toLowerCase());
+  return expr
+    .replace(/\b(AND|OR|NOT)\b/g, (k) => k.toLowerCase())
+    .replace(/\b(MIN|MAX|SUM|AVG|ROUND|IF|ABS)\s*\(/g, (_m, f: string) => `${FUNCTION_ALIASES[f]}(`);
 }
 
 /**
  * Whitelist node AST — tidak pernah `eval`. Mengembalikan variabel yang dirujuk,
  * atau pesan error yang bisa ditampilkan ke admin.
  */
-export function analyzeExpression(expr: string, allowedVariables: string[]): { error?: string; variables: string[] } {
+export function analyzeExpression(
+  expr: string,
+  allowedVariables: string[],
+  allowedFunctions: Set<string> = ALLOWED_FUNCTIONS,
+): { error?: string; variables: string[] } {
   if (expr.length > MAX_EXPRESSION_LENGTH) return { error: `Ekspresi maks. ${MAX_EXPRESSION_LENGTH} karakter`, variables: [] };
   let root: MathNode;
   try {
@@ -59,7 +70,7 @@ export function analyzeExpression(expr: string, allowedVariables: string[]): { e
         return;
       case "FunctionNode": {
         const name = typeof n.fn === "object" ? n.fn.name : "";
-        if (!ALLOWED_FUNCTIONS.has(name)) error = `Fungsi tidak diizinkan: ${name}`;
+        if (!allowedFunctions.has(name)) error = `Fungsi tidak diizinkan: ${name}`;
         return;
       }
       case "SymbolNode": {
@@ -82,6 +93,17 @@ export function evaluateExpression(expr: string, scope: Record<string, unknown>)
   try {
     const result = math.evaluate(normalizeExpression(expr), { ...scope });
     return typeof result === "boolean" ? result : null;
+  } catch {
+    return null;
+  }
+}
+
+/** FR-09.03: hasil angka rumus skor; null jika gagal/tidak terhingga (mis. bagi nol). Panggil analyzeExpression dulu. */
+export function evaluateNumber(expr: string, scope: Record<string, unknown>): number | null {
+  try {
+    const result = math.evaluate(normalizeExpression(expr), { ...scope });
+    const n = typeof result === "boolean" ? Number(result) : result;
+    return typeof n === "number" && Number.isFinite(n) ? n : null;
   } catch {
     return null;
   }
