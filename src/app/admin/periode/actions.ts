@@ -10,6 +10,7 @@ import { formatWib } from "@/lib/date";
 import { effectiveClosesAt, MANUAL_TRANSITIONS, PERIOD_STATUS } from "@/lib/period";
 import { copyPeriodSchema, extensionSchema, periodSchema } from "@/lib/validation/period";
 import { copyQuestionnaireToPeriod } from "@/lib/questionnaireCopy";
+import { copyScheme } from "@/lib/scoringData";
 
 export type PeriodFormState = { error?: string; fieldErrors?: Record<string, string[]>; values?: Record<string, string> };
 
@@ -140,9 +141,9 @@ export async function addExtensionAction(formData: FormData) {
 }
 
 /**
- * FR-02.06: salin periode → DRAFT baru dengan tanggal baru, pengaturan yang sama, dan
- * kuesioner (bagian/soal/opsi/logika tampil/aturan) sebagai Draf. Jawaban tidak ikut.
- * shortcut: skema skor BELUM ikut tersalin karena modulnya belum ada — tambahkan saat M09.
+ * FR-02.06: salin periode → DRAFT baru dengan tanggal baru, pengaturan yang sama,
+ * kuesioner (bagian/soal/opsi/logika tampil/aturan) dan skema skor ACTIVE sebagai Draf.
+ * Jawaban & skor tidak ikut.
  */
 export async function copyPeriodAction(formData: FormData) {
   const user = await requireRole(["SUPER_ADMIN"]);
@@ -161,6 +162,7 @@ export async function copyPeriodAction(formData: FormData) {
   const source = await prisma.surveyPeriod.findFirst({ where: { id: sourceId.data, deletedAt: null } });
   if (!source) backTo("/admin/periode", { error: "Periode tidak ditemukan" });
 
+  const activeScheme = await prisma.scoringScheme.findFirst({ where: { periodId: source.id, status: "ACTIVE", deletedAt: null } });
   const { copy, questionnaire } = await runAsUser(user, () =>
     withDb(async (tx) => {
       const copy = await tx.surveyPeriod.create({
@@ -175,10 +177,13 @@ export async function copyPeriodAction(formData: FormData) {
           createdBy: user.id,
         },
       });
-      return { copy, questionnaire: await copyQuestionnaireToPeriod(tx, source.id, copy.id, user.id) };
+      const questionnaire = await copyQuestionnaireToPeriod(tx, source.id, copy.id, user.id);
+      if (activeScheme) await copyScheme(tx, activeScheme.id, { periodId: copy.id, name: activeScheme.name, version: 1 }, user.id);
+      return { copy, questionnaire };
     }),
   );
+  const parts = [questionnaire && "kuesioner", activeScheme && "skema skor"].filter(Boolean).join(" dan ");
   backTo(`/admin/periode/${copy.id}`, {
-    ok: `Periode ${copy.name} dibuat sebagai salinan ${source.name} (Draf)${questionnaire ? ", termasuk kuesioner (Draf)" : ""}`,
+    ok: `Periode ${copy.name} dibuat sebagai salinan ${source.name} (Draf)${parts ? `, termasuk ${parts} (Draf)` : ""}`,
   });
 }
