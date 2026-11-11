@@ -11,6 +11,7 @@ import { effectiveClosesAt, MANUAL_TRANSITIONS, PERIOD_STATUS } from "@/lib/peri
 import { copyPeriodSchema, extensionSchema, periodSchema } from "@/lib/validation/period";
 import { copyQuestionnaireToPeriod } from "@/lib/questionnaireCopy";
 import { copyScheme } from "@/lib/scoringData";
+import { createDefaultSchedules } from "@/lib/reminders";
 
 export type PeriodFormState = { error?: string; fieldErrors?: Record<string, string[]>; values?: Record<string, string> };
 
@@ -50,7 +51,10 @@ export async function savePeriodAction(_prev: PeriodFormState, formData: FormDat
     withDb((tx) =>
       existing
         ? tx.surveyPeriod.update({ where: { id: existing.id }, data: { ...data, updatedBy: user.id } })
-        : tx.surveyPeriod.create({ data: { ...data, status: "DRAFT", createdBy: user.id } }),
+        : tx.surveyPeriod.create({ data: { ...data, status: "DRAFT", createdBy: user.id } }).then(async (p) => {
+            await createDefaultSchedules(tx, p.id, user.id); // FR-10.05
+            return p;
+          }),
     ),
   );
   backTo(`/admin/periode/${period.id}`, { ok: existing ? "Periode disimpan" : `Periode ${period.name} dibuat (Draf)` });
@@ -179,6 +183,12 @@ export async function copyPeriodAction(formData: FormData) {
       });
       const questionnaire = await copyQuestionnaireToPeriod(tx, source.id, copy.id, user.id);
       if (activeScheme) await copyScheme(tx, activeScheme.id, { periodId: copy.id, name: activeScheme.name, version: 1 }, user.id);
+      const schedules = await tx.reminderSchedule.findMany({ where: { periodId: source.id, deletedAt: null } });
+      if (schedules.length) {
+        await tx.reminderSchedule.createMany({
+          data: schedules.map((s) => ({ periodId: copy.id, kind: s.kind, offsetDays: s.offsetDays, targetStatuses: s.targetStatuses ?? [], templateId: s.templateId, isActive: s.isActive, createdBy: user.id })),
+        });
+      } else await createDefaultSchedules(tx, copy.id, user.id);
       return { copy, questionnaire };
     }),
   );
@@ -186,4 +196,49 @@ export async function copyPeriodAction(formData: FormData) {
   backTo(`/admin/periode/${copy.id}`, {
     ok: `Periode ${copy.name} dibuat sebagai salinan ${source.name} (Draf)${parts ? `, termasuk ${parts} (Draf)` : ""}`,
   });
+}
+
+const SCHEDULE_TEMPLATE = { DEADLINE: "REMINDER_DEADLINE", ACTIVATION: "REMINDER_ACTIVATION", REVISION: "REMINDER_REVISION" } as const;
+
+/** FR-10.05: jadwal & status sasaran reminder diatur admin per periode. */
+export async function addScheduleAction(formData: FormData) {
+  const user = await requireRole(["SUPER_ADMIN"]);
+  const parsed = z
+    .object({
+      periodId: z.uuid(),
+      kind: z.enum(["DEADLINE", "ACTIVATION", "REVISION"]),
+      offsetDays: z.coerce.number().int("Jumlah hari harus bilangan bulat").min(0, "Jumlah hari minimal 0").max(90, "Jumlah hari maks. 90"),
+      targetStatuses: z.array(z.enum(["NOT_STARTED", "DRAFT"])),
+    })
+    .safeParse({
+      periodId: formData.get("periodId"),
+      kind: formData.get("kind"),
+      offsetDays: formData.get("offsetDays"),
+      targetStatuses: formData.getAll("targetStatuses"),
+    });
+  if (!parsed.success) backTo("/admin/periode", { error: parsed.error.issues[0].message });
+  const { periodId, kind, offsetDays } = parsed.data;
+  const path = `/admin/periode/${periodId}`;
+  const targets = kind === "DEADLINE" ? parsed.data.targetStatuses : kind === "REVISION" ? ["NEEDS_REVISION"] : [];
+  if (kind === "DEADLINE" && targets.length === 0) backTo(path, { error: "Pilih minimal satu status sasaran" });
+  const template = await prisma.emailTemplate.findUnique({ where: { key: SCHEDULE_TEMPLATE[kind] } });
+  if (!template) backTo(path, { error: "Template email reminder belum ada" });
+
+  await runAsUser(user, () =>
+    withDb((tx) => tx.reminderSchedule.create({ data: { periodId, kind, offsetDays, targetStatuses: targets, templateId: template.id, createdBy: user.id } })),
+  );
+  backTo(path, { ok: "Jadwal reminder ditambahkan" });
+}
+
+export async function toggleScheduleAction(formData: FormData) {
+  const user = await requireRole(["SUPER_ADMIN"]);
+  const ids = z.object({ periodId: z.uuid(), scheduleId: z.uuid() }).safeParse({ periodId: formData.get("periodId"), scheduleId: formData.get("scheduleId") });
+  if (!ids.success) backTo("/admin/periode", { error: "Jadwal tidak valid" });
+  const path = `/admin/periode/${ids.data.periodId}`;
+  const schedule = await prisma.reminderSchedule.findFirst({ where: { id: ids.data.scheduleId, periodId: ids.data.periodId, deletedAt: null } });
+  if (!schedule) backTo(path, { error: "Jadwal tidak ditemukan" });
+  await runAsUser(user, () =>
+    withDb((tx) => tx.reminderSchedule.update({ where: { id: schedule.id }, data: { isActive: !schedule.isActive, updatedBy: user.id } })),
+  );
+  backTo(path, { ok: schedule.isActive ? "Jadwal dinonaktifkan" : "Jadwal diaktifkan" });
 }

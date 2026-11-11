@@ -10,7 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { FlashMessage } from "@/components/flash-message";
 import { ConfirmAction } from "@/components/confirm-action";
-import { addExtensionAction, copyPeriodAction, setPeriodStatusAction } from "../actions";
+import { addExtensionAction, addScheduleAction, copyPeriodAction, setPeriodStatusAction, toggleScheduleAction } from "../actions";
 import { PeriodForm } from "../period-form";
 
 const STATUS_ACTION_LABEL = { DRAFT: "", OPEN: "Buka periode", CLOSED: "Tutup periode", ARCHIVED: "Arsipkan" } as const;
@@ -35,6 +35,7 @@ export default async function DetailPeriodePage({
     include: {
       copiedFrom: true,
       periodExtensions: { where: { deletedAt: null }, include: { institution: true }, orderBy: { createdAt: "desc" } },
+      reminderSchedules: { where: { deletedAt: null }, orderBy: [{ kind: "asc" }, { offsetDays: "desc" }] },
     },
   });
   if (!period) notFound();
@@ -156,6 +157,63 @@ export default async function DetailPeriodePage({
             </div>
             <Button type="submit" variant="outline">
               Simpan perpanjangan
+            </Button>
+          </form>
+        )}
+      </section>
+
+      {/* FR-10.05: jadwal reminder per periode (cron harian 07.00 WIB) */}
+      <section className="space-y-3">
+        <h2 className="font-semibold">Jadwal reminder</h2>
+        <ul className="space-y-1 text-sm">
+          {period.reminderSchedules.map((s) => (
+            <li key={s.id} className="flex flex-wrap items-center gap-2">
+              <span className={s.isActive ? "" : "text-muted-foreground line-through"}>
+                {s.kind === "DEADLINE"
+                  ? `Tenggat H-${s.offsetDays} → ${(s.targetStatuses as string[]).map((t) => (t === "DRAFT" ? "Draf" : "Belum Mengisi")).join(", ")}`
+                  : s.kind === "ACTIVATION"
+                    ? `Aktivasi belum dilakukan, ${s.offsetDays} hari setelah akun dibuat`
+                    : `Batas revisi H-${s.offsetDays}`}
+              </span>
+              {s.lastRunAt && <span className="text-muted-foreground">· terakhir jalan {formatWib(s.lastRunAt)}</span>}
+              {user.role === "SUPER_ADMIN" && (
+                <form action={toggleScheduleAction}>
+                  <input type="hidden" name="periodId" value={period.id} />
+                  <input type="hidden" name="scheduleId" value={s.id} />
+                  <button type="submit" className="text-xs underline">
+                    {s.isActive ? "nonaktifkan" : "aktifkan"}
+                  </button>
+                </form>
+              )}
+            </li>
+          ))}
+        </ul>
+        {user.role === "SUPER_ADMIN" && period.status !== "ARCHIVED" && (
+          <form action={addScheduleAction} className="flex flex-wrap items-end gap-2 text-sm">
+            <input type="hidden" name="periodId" value={period.id} />
+            <div className="space-y-1">
+              <Label htmlFor="kind">Jenis</Label>
+              <select id="kind" name="kind" className="h-9 rounded-md border px-2">
+                <option value="DEADLINE">Tenggat (H-n)</option>
+                <option value="ACTIVATION">Aktivasi (n hari setelah akun dibuat)</option>
+                <option value="REVISION">Batas revisi (H-n)</option>
+              </select>
+            </div>
+            <div className="space-y-1">
+              <Label htmlFor="offsetDays">Hari (n)</Label>
+              <Input id="offsetDays" name="offsetDays" type="number" min={0} defaultValue={3} className="w-20" />
+            </div>
+            <fieldset className="flex items-center gap-3">
+              <legend className="sr-only">Status sasaran (tenggat)</legend>
+              <label className="flex items-center gap-1">
+                <input type="checkbox" name="targetStatuses" value="NOT_STARTED" defaultChecked /> Belum Mengisi
+              </label>
+              <label className="flex items-center gap-1">
+                <input type="checkbox" name="targetStatuses" value="DRAFT" defaultChecked /> Draf
+              </label>
+            </fieldset>
+            <Button type="submit" size="sm" variant="outline">
+              Tambah jadwal
             </Button>
           </form>
         )}
