@@ -832,6 +832,8 @@ model ValidationResult {
   status        ValidationResultStatus @default(OPEN)
   reviewedById  String?                @map("reviewed_by") @db.Uuid
   reviewedAt    DateTime?              @map("reviewed_at")
+  // FR-08.04 catatan opsional saat flag diterima — tidak ada di ERD, ditambah Tahap 12
+  reviewNote    String?                @map("review_note")
   createdAt     DateTime               @default(now()) @map("created_at")
   createdBy     String                 @map("created_by") @db.Uuid
   updatedAt     DateTime               @updatedAt @map("updated_at")
