@@ -66,6 +66,15 @@ Karena 98 FK `*_by → users.id` (dan semua trigger/CHECK/partial-index Tahap 3)
 - **DB lokal yang sebenarnya dipakai = PostgreSQL 18 native Windows** (`C:\Program Files\PostgreSQL\18`, layanan di `localhost:5432`, user `postgres`), BUKAN kontainer Docker `libcon-pg` — kontainer itu juga map port 5432 tapi kalah oleh layanan native, jadi kosong. Untuk query manual: `& "C:\Program Files\PostgreSQL\18\bin\psql.exe" -h localhost -U postgres -d libcon`.
 - `next dev` di Windows kadang **tidak me-reload modul `src/lib` yang diubah** (HMR) — gejalanya e2e gagal dengan perilaku kode lama. Restart dev server sebelum menyimpulkan ada bug.
 
+## Pengisian survei portal (Tahap 11, sudah diimplementasi & diuji)
+
+- **Kolom baru `submissions.section_evidence jsonb`** (`{section_id: url}`) — link bukti dukung per bagian tidak punya tempat di ERD. Migrasi `20261110081809_...` (`--create-only`, 98 DROP dihapus).
+- `src/lib/answers.ts`: codec jawaban ↔ kolom `answers` (`encodeAnswer` = validasi BENTUK saja; aturan isi dinilai mesin saat kirim), `parseIdNumber` (titik ribuan, koma desimal), `surveyMode` (countdown/editable/submitted/closed — penguncian Kirim memakai `effectiveClosesAt` per lembaga, bukan status periode), `pickPortalPeriod`, `evidenceKey`/`parseAnswerKey` (kunci `evidence:section|question:<id>`).
+- `loadParticipantSurvey(institutionId)` + `checkSubmission(survey)` (`src/lib/participantSurvey.ts`) — SATU-SATUNYA jalur baca survei peserta & pemeriksaan kirim; server selalu menilai ulang dari DB. YOY_CHANGE memakai jawaban periode lalu lewat `questions.copied_from_id`.
+- Autosave: debounce 1 dtk, satu request pada satu waktu, retry bertahap saat jaringan gagal, **flush saat unmount & `visibilitychange`** (navigasi Link tidak memicu `beforeunload` — bug ini ditemukan e2e). `answer_history.created_by` = akun pengubah (FR-05.07).
+- Kirim: status SUBMITTED, `answers.is_locked`, `submission_snapshots`, Flag → `validation_results` + `open_flag_count`, email `SUBMISSION_RECEIPT` di luar transaksi. **Belum:** lampiran PDF tanda terima (FR-07.10, butuh @react-pdf), status NOT_SUBMITTED otomatis saat tenggat lewat (BR-12), alur NEEDS_REVISION (M08).
+- e2e: project Playwright `global-periode` → `global-survei` (dependencies) karena state satu periode OPEN; spec lain di project `chromium` paralel. Fixture `setup-open-survey` mengarsipkan periode `E2E ` lama & menolak jika ada periode OPEN non-uji. Input terkontrol: `waitForLoadState("networkidle")` sebelum mengetik (ketikan sebelum hidrasi bisa ter-reset). Tunggu autosave baru lewat atribut `data-saved-at`, bukan teks "Tersimpan".
+
 ## Builder kuesioner (Tahap 10, sudah diimplementasi & diuji)
 
 - Tidak ada migrasi skema; library baru dari tech stack: `@dnd-kit/core|sortable|utilities`, `mathjs`.
