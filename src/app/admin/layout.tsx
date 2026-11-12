@@ -18,6 +18,7 @@ export default async function AdminLayout({ children }: { children: ReactNode })
           <Link href="/admin/kuesioner">Kuesioner</Link>
           <Link href="/admin/verifikasi">Verifikasi</Link>
           <Link href="/admin/skoring">Skoring</Link>
+          <Link href="/admin/report">Report</Link>
           <Link href="/admin/peserta">Peserta</Link>
           <Link href="/admin/permintaan-akun">
             Permintaan Akun

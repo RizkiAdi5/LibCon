@@ -187,6 +187,12 @@ async function main() {
           update: {},
         });
         await tx.appSetting.upsert({
+          where: { key: "iplm_export" },
+          // FR-11.05: kolom Provinsi & KEW_NORM ekspor IPLM — nilai dari docs/data-contoh-iplm.xlsx
+          create: { key: "iplm_export", value: { provinsi: "PROVINSI KALIMANTAN BARAT", kewNorm: "KAB/KOTA" }, createdBy: SYSTEM_USER_ID },
+          update: {},
+        });
+        await tx.appSetting.upsert({
           where: { key: "passing_score_threshold" },
           create: { key: "passing_score_threshold", value: { threshold: 70 }, createdBy: SYSTEM_USER_ID },
           update: {},
