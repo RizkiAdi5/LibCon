@@ -66,6 +66,14 @@ Karena 98 FK `*_by → users.id` (dan semua trigger/CHECK/partial-index Tahap 3)
 - **DB lokal yang sebenarnya dipakai = PostgreSQL 18 native Windows** (`C:\Program Files\PostgreSQL\18`, layanan di `localhost:5432`, user `postgres`), BUKAN kontainer Docker `libcon-pg` — kontainer itu juga map port 5432 tapi kalah oleh layanan native, jadi kosong. Untuk query manual: `& "C:\Program Files\PostgreSQL\18\bin\psql.exe" -h localhost -U postgres -d libcon`.
 - `next dev` di Windows kadang **tidak me-reload modul `src/lib` yang diubah** (HMR) — gejalanya e2e gagal dengan perilaku kode lama. Restart dev server sebelum menyimpulkan ada bug.
 
+## Report & Skor Saya (Tahap 15, sudah diimplementasi & diuji)
+
+- Tidak ada migrasi. Library baru: `exceljs`, `@react-pdf/renderer`, `jszip` (ZIP rapor massal). Pure `src/lib/report.ts` (filter Zod `parseReportFilter`/`filterToQuery`/`applyReportFilter`, statistik, `IPLM_COLUMNS` 57 kolom persis `docs/data-contoh-iplm.xlsx`, `iplmRow`); loader `src/lib/reportData.ts` (`loadReportRows` = satu baris per lembaga aktif per periode, skor `is_current` + nilai node dimensi/subdimensi, jawaban per kode soal; `loadFilteredReport` untuk route ekspor; `raporPeers`).
+- Filter field tunggal (`skor`, `flag`, `skorMin/Max`) dibungkus `single()` — `URLSearchParams.getAll` memberi array dan sempat membuat filter skor hilang diam-diam di ekspor (ditemukan e2e).
+- `/admin/report`: form filter auto-submit (GET), filter tersimpan (`saved_report_filters`, pribadi/dibagikan, hapus hanya milik sendiri), ranking keseluruhan/jenis/kecamatan, grafik CSS/SVG (tanpa Recharts), radar (`src/components/radar-chart.tsx`), analitik jawaban angka. Ekspor `/admin/report/ekspor/{excel,pdf,rapor}` — semua tercatat `activity_logs` (`EXPORT_REPORT` + filter & jumlah baris; rapor tunggal `DOWNLOAD_RAPOR`).
+- Ekspor IPLM: Provinsi & KEW_NORM dari `app_settings.iplm_export` (seed); klasifikasi hanya SD/SMP (TBM kosong — `shortcut:` di `report.ts`); `Indeks_Final_0_100` kosong (Q3); kolom `j_*`/`tambah_*` terisi hanya bila kode soal kuesioner sama dengan nama kolom IPLM.
+- Portal `/portal/skor-saya` (FR-12.01–12.05): sebelum `scoresPublished` → "Penilaian sedang diproses"; ranking hanya jika `show_ranking_to_participants`; rapor `/portal/skor-saya/rapor?periode=` cek publikasi + lembaga dari sesi. PDF di `src/lib/pdf/reportPdf.tsx` belum memuat logo (aset belum ada).
+
 ## Monitoring & reminder (Tahap 14, sudah diimplementasi & diuji)
 
 - Tidak ada migrasi. `src/lib/monitoring.ts` (murni): tanggal WIB (`wibDate`, `startOfWibDay`, `wibDaysUntil`), `reminderDueToday`, `monitoringStatus` (satu status per lembaga: Belum Aktivasi / status kiriman / Tidak Mengisi bila draf lewat tenggat — BR-12 hanya untuk TAMPILAN, status DB tidak diubah), `stackCounts`, `csvCell` (cegah formula injection).

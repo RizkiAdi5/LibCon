@@ -13,6 +13,7 @@ export default async function PortalLayout({ children }: { children: ReactNode }
         <nav className="flex gap-4 text-sm">
           <Link href="/portal/beranda">Beranda</Link>
           <Link href="/portal/survei">Survei</Link>
+          <Link href="/portal/skor-saya">Skor Saya</Link>
           <Link href="/portal/akun">Akun</Link>
         </nav>
         <form action={logoutAction}>

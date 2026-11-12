@@ -1,5 +1,7 @@
 import "dotenv/config"; // CRON_SECRET untuk memanggil endpoint cron
 import { test, expect, type Browser, type Page } from "@playwright/test";
+import ExcelJS from "exceljs";
+import { IPLM_COLUMNS } from "../../src/lib/report";
 
 const TEST_PASSWORD = "KataSandiKuat!2026";
 
@@ -334,6 +336,11 @@ test("skoring: preset 30/70 → validasi bobot → aktifkan → uji → hitung r
   await expect(scores.getByRole("row", { name: /Perpus E2E/ })).toContainText("Belum Lolos");
   await expect(scores.getByRole("row", { name: /Perpus E2E/ }).getByRole("cell").first()).toHaveText("2");
 
+  // FR-12.01: sebelum publikasi peserta hanya melihat "sedang diproses"
+  await page.goto("/portal/skor-saya");
+  await expect(page.getByTestId("score-pending")).toBeVisible();
+  await expect(page.getByTestId("my-index")).toHaveCount(0);
+
   // FR-09.11: publikasi
   await admin.getByText("Publikasikan skor", { exact: true }).click();
   await admin.getByRole("button", { name: "Ya, publikasikan" }).click();
@@ -355,6 +362,40 @@ test("skoring: preset 30/70 → validasi bobot → aktifkan → uji → hitung r
   await expect(scores.getByRole("row", { name: /Perpus E2E/ })).toContainText("v2");
   await expect(admin.getByText(/v1 · Resmi · Selesai · 2 kiriman/)).toBeVisible();
   await expect(admin.getByText(/v2 · Resmi · Selesai · 2 kiriman/)).toBeVisible();
+
+  // M11: AC filter "jenis SD dan skor ≥ 70" → hanya kiriman SD dengan skor ≥ 70 (default periode = periode OPEN uji)
+  await admin.goto("/admin/report");
+  await admin.waitForLoadState("networkidle");
+  const ranking = admin.getByTestId("ranking");
+  await expect(ranking.getByRole("row", { name: /Perpus E2E/ })).toBeVisible();
+  await admin.getByLabel("Sekolah Dasar").check();
+  await expect(admin).toHaveURL(/jenis=/);
+  await admin.getByLabel("Rentang skor").selectOption("lolos");
+  await expect(admin).toHaveURL(/skor=lolos/);
+  await expect(ranking.getByRole("row", { name: /Perpus Survei/ })).toContainText("100,00");
+  await expect(ranking.getByRole("row", { name: /Perpus E2E/ })).toHaveCount(0);
+
+  // FR-11.05 + AC M11: Excel kolom & urutan IPLM; FR-11.07 ekspor tercatat dengan jumlah baris
+  const [xlsx] = await Promise.all([admin.waitForEvent("download"), admin.getByRole("link", { name: "Ekspor Excel (format IPLM)" }).click()]);
+  const wb = new ExcelJS.Workbook();
+  await wb.xlsx.readFile((await xlsx.path())!);
+  const sheet = wb.getWorksheet("Data")!;
+  expect((sheet.getRow(1).values as unknown[]).slice(1)).toEqual([...IPLM_COLUMNS]);
+  expect(sheet.rowCount).toBe(2);
+  expect(sheet.getRow(2).getCell(IPLM_COLUMNS.indexOf("nm_perpustakaan") + 1).value).toMatch(/Perpus Survei/);
+  expect(sheet.getRow(2).getCell(IPLM_COLUMNS.indexOf("j_judul_koleksi_tercetak") + 1).value ?? null).toBeNull(); // kode soal uji bukan kode IPLM
+  const exportLog = await fixture(page, { action: "latest-activity", activity: "EXPORT_REPORT" });
+  expect(exportLog.metadata).toMatchObject({ kind: "excel-iplm", rowCount: 1, filter: { skor: "lolos" } });
+  const [zip] = await Promise.all([admin.waitForEvent("download"), admin.getByRole("link", { name: "Rapor semua lembaga (ZIP)" }).click()]);
+  expect(zip.suggestedFilename()).toMatch(/\.zip$/);
+
+  // FR-12.02/12.04: setelah publikasi peserta melihat indeks, kategori, rincian & bisa unduh rapor
+  await page.goto("/portal/skor-saya");
+  await expect(page.getByTestId("my-index")).toHaveText("100,00");
+  await expect(page.getByText("Lolos Nasional").first()).toBeVisible();
+  const [rapor] = await Promise.all([page.waitForEvent("download"), page.getByRole("link", { name: "Unduh rapor PDF" }).click()]);
+  expect(rapor.suggestedFilename()).toMatch(/^rapor-.*\.pdf$/);
+  expect((await fixture(page, { action: "latest-activity", activity: "DOWNLOAD_RAPOR" })).description).toContain("Unduh rapor");
 
   await fixture(page, { action: "close-e2e-periods" });
 });
