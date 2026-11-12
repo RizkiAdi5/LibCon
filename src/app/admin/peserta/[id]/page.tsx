@@ -13,16 +13,8 @@ import { accountAction, resendActivationAction, setInstitutionActiveAction } fro
 import { loadInstitutionFormOptions } from "../form-options";
 import { InstitutionForm } from "../institution-form";
 import { ACCOUNT_STATUS } from "@/lib/accountStatus";
+import { ACTIVITY_LABEL } from "@/lib/activityLog";
 
-const ACTIVITY_LABEL: Record<string, string> = {
-  LOGIN: "Login",
-  LOGOUT: "Logout",
-  LOGIN_FAILED: "Login gagal",
-  ACCOUNT_LOCKED: "Akun terkunci",
-  PASSWORD_CHANGED: "Password dibuat/diganti (termasuk aktivasi)",
-  RESEND_ACTIVATION: "Kirim ulang aktivasi",
-  UNAUTHORIZED_ACCESS: "Percobaan akses tanpa izin",
-};
 
 export default async function DetailPesertaPage({
   params,
