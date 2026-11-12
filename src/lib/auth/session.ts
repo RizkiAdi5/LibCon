@@ -5,15 +5,16 @@ import { withDb } from "../db/withDb";
 import { runWithRequestContext } from "../db/requestContext";
 import type { UserRole } from "@/generated/prisma/client";
 import { SESSION_COOKIE_NAME } from "./sessionCookie";
+import { getSessionPolicy } from "../settings";
 
 export { SESSION_COOKIE_NAME };
 
-const SESSION_TTL_MS: Record<UserRole, number> = {
-  SUPER_ADMIN: 8 * 60 * 60 * 1000, // FR-04.05: 8 jam untuk admin
-  ADMIN: 8 * 60 * 60 * 1000,
-  PARTICIPANT: 24 * 60 * 60 * 1000, // 24 jam untuk peserta
-  SYSTEM: 0,
-};
+/** FR-04.05: default 8 jam admin / 24 jam peserta, bisa diubah di Pengaturan › Keamanan (FR-14.03). */
+async function sessionTtlMs(role: UserRole): Promise<number> {
+  if (role === "SYSTEM") return 0;
+  const policy = await getSessionPolicy();
+  return (role === "PARTICIPANT" ? policy.participantHours : policy.adminHours) * 60 * 60 * 1000;
+}
 
 const SESSION_REFRESH_MS = 15 * 60 * 1000;
 
@@ -30,7 +31,7 @@ export async function createSession(
     data: {
       userId: params.userId,
       sessionTokenHash: hashSessionToken(raw),
-      expiresAt: new Date(Date.now() + SESSION_TTL_MS[params.role]),
+      expiresAt: new Date(Date.now() + (await sessionTtlMs(params.role))),
       ipAddress: params.ip,
       userAgent: params.userAgent,
       createdBy: params.createdBy,
@@ -78,7 +79,7 @@ export async function getSessionUser(): Promise<SessionUser | null> {
 
   // FR-04.05: batas 8/24 jam dihitung dari aktivitas terakhir. Tulis paling sering tiap 15 menit
   // supaya tidak ada UPDATE (+ baris audit_logs) di setiap request.
-  const ttl = SESSION_TTL_MS[session.user.role];
+  const ttl = await sessionTtlMs(session.user.role);
   if (session.expiresAt.getTime() - Date.now() < ttl - SESSION_REFRESH_MS) {
     await runWithRequestContext(
       { userId: session.user.id, requestId: randomUUID(), ip: null, userAgent: null, source: "WEB" },

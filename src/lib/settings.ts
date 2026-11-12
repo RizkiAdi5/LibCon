@@ -46,6 +46,22 @@ export const DEFAULT_LOCKOUT_POLICY: LockoutPolicy = {
   resetRequestsPerHour: 5,
 };
 
+/** FR-04.05 / FR-14.03: lama sesi sejak aktivitas terakhir. */
+export type SessionPolicy = { adminHours: number; participantHours: number };
+export const DEFAULT_SESSION_POLICY: SessionPolicy = { adminHours: 8, participantHours: 24 };
+
+export async function getSessionPolicy(): Promise<SessionPolicy> {
+  return { ...DEFAULT_SESSION_POLICY, ...(await getAppSetting<Partial<SessionPolicy>>("session_policy", {})) };
+}
+
+/** FR-14.04: identitas penyelenggara (rapor PDF, email). */
+export type IdentitySettings = { libraryName: string; address: string; senderEmail: string; signerName: string; signerTitle: string };
+export const DEFAULT_IDENTITY: IdentitySettings = { libraryName: "", address: "", senderEmail: "", signerName: "", signerTitle: "" };
+
+export async function getIdentity(): Promise<IdentitySettings> {
+  return { ...DEFAULT_IDENTITY, ...(await getAppSetting<Partial<IdentitySettings>>("identity", {})) };
+}
+
 export function getPasswordPolicy() {
   return getAppSetting<PasswordPolicy>("password_policy", DEFAULT_PASSWORD_POLICY);
 }

@@ -2,6 +2,7 @@ import { Document, Page, StyleSheet, Text, View, renderToBuffer } from "@react-p
 import { formatWib } from "../date";
 import { MONITORING_STATUS } from "../monitoring";
 import { groupMean, histogram, type ReportRow } from "../report";
+import type { IdentitySettings } from "../settings";
 
 /**
  * PDF ringkas report (FR-11.06) & rapor per peserta (FR-11.06, FR-12.04).
@@ -75,12 +76,18 @@ export function renderSummaryPdf(rows: ReportRow[], filterLabel: string) {
 }
 
 /** Rapor satu lembaga; `peers` = kiriman berskor jenis yang sama di periode yang sama (pembanding rata-rata). */
-export function renderRaporPdf(row: Scored, peers: ReportRow[], showRanking: boolean) {
+export function renderRaporPdf(row: Scored, peers: ReportRow[], showRanking: boolean, identity: IdentitySettings) {
   const nodes = Object.entries(row.score.nodeInfo ?? {}).sort(([a, x], [b, y]) => (x.level === y.level ? a.localeCompare(b) : x.level === "DIMENSION" ? -1 : 1));
   const peerMean = (code: string) => groupMean(peers.filter(isScored), () => "x", (r) => r.score.nodes[code])[0]?.mean;
   return renderToBuffer(
     <Document title={`Rapor ${row.libraryName}`}>
       <Page size="A4" style={s.page}>
+        {identity.libraryName && (
+          <Text style={s.muted}>
+            {identity.libraryName}
+            {identity.address ? ` · ${identity.address}` : ""}
+          </Text>
+        )}
         <Text style={s.h1}>Rapor Penilaian Perpustakaan</Text>
         <Text>{row.libraryName}</Text>
         <Text style={s.muted}>
@@ -114,6 +121,12 @@ export function renderRaporPdf(row: Scored, peers: ReportRow[], showRanking: boo
           })}
         />
         <Text style={[s.muted, { marginTop: 16 }]}>Skema skor versi {row.score.schemeVersion}. Dicetak {formatWib(new Date())}.</Text>
+        {identity.signerName && (
+          <View style={{ marginTop: 32, alignSelf: "flex-end", alignItems: "center" }}>
+            <Text>{identity.signerTitle}</Text>
+            <Text style={{ marginTop: 40, fontFamily: "Helvetica-Bold" }}>{identity.signerName}</Text>
+          </View>
+        )}
       </Page>
     </Document>,
   );

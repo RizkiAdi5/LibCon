@@ -29,8 +29,8 @@ export default async function AdminLayout({ children }: { children: ReactNode })
           </Link>
           {user.role === "SUPER_ADMIN" && (
             <>
-              <Link href="/admin/pengaturan/wilayah">Wilayah</Link>
-              <Link href="/admin/pengaturan/jenis-peserta">Jenis Peserta</Link>
+              <Link href="/admin/pengaturan">Pengaturan</Link>
+              <Link href="/admin/log-aktivitas">Log Aktivitas</Link>
             </>
           )}
         </nav>

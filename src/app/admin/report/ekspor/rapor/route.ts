@@ -4,6 +4,7 @@ import { prisma } from "@/lib/db/client";
 import { requireRole } from "@/lib/auth/guard";
 import { renderRaporPdf } from "@/lib/pdf/reportPdf";
 import { loadFilteredReport, loadReportRows, raporPeers } from "@/lib/reportData";
+import { getIdentity } from "@/lib/settings";
 import { attachment, logExport } from "../log";
 
 const safeName = (s: string) => s.replace(/[^\p{L}\p{N} _-]+/gu, "").trim().slice(0, 80) || "lembaga";
@@ -20,18 +21,19 @@ export async function GET(request: Request) {
     const all = await loadReportRows([sub.periodId]);
     const row = all.find((r) => r.institutionId === sub.institutionId);
     if (!row?.score) return new Response("Kiriman belum punya skor resmi", { status: 404 });
-    const pdf = await renderRaporPdf({ ...row, score: row.score }, raporPeers(all, row), true);
+    const pdf = await renderRaporPdf({ ...row, score: row.score }, raporPeers(all, row), true, await getIdentity());
     await logExport(user, "rapor", null, 1, { type: "submission", id: id.data! });
     return attachment(new Uint8Array(pdf), `rapor-${row.npp}.pdf`, "application/pdf");
   }
 
   const { filter, rows, allRows } = await loadFilteredReport(params);
   if (filter.periode.length === 0) return new Response("Pilih periode", { status: 400 });
+  const identity = await getIdentity();
   const zip = new JSZip();
   let count = 0;
   for (const row of rows) {
     if (!row.score) continue;
-    const pdf = await renderRaporPdf({ ...row, score: row.score }, raporPeers(allRows, row), true);
+    const pdf = await renderRaporPdf({ ...row, score: row.score }, raporPeers(allRows, row), true, identity);
     zip.file(`${row.periodYear}/${row.npp} ${safeName(row.libraryName)}.pdf`, pdf);
     count++;
   }

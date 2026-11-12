@@ -3,6 +3,7 @@ import { prisma } from "@/lib/db/client";
 import { requireRole, runAsUser } from "@/lib/auth/guard";
 import { withDb } from "@/lib/db/withDb";
 import { scoresPublished } from "@/lib/submissionReview";
+import { getIdentity } from "@/lib/settings";
 import { renderRaporPdf } from "@/lib/pdf/reportPdf";
 import { loadReportRows, raporPeers } from "@/lib/reportData";
 
@@ -17,7 +18,7 @@ export async function GET(request: Request) {
   const rows = await loadReportRows([period.id]);
   const row = rows.find((r) => r.institutionId === user.institutionId);
   if (!row?.score || !row.submissionId) return new Response("Skor tidak ditemukan", { status: 404 });
-  const pdf = await renderRaporPdf({ ...row, score: row.score }, raporPeers(rows, row), period.showRankingToParticipants);
+  const pdf = await renderRaporPdf({ ...row, score: row.score }, raporPeers(rows, row), period.showRankingToParticipants, await getIdentity());
   await runAsUser(user, () =>
     withDb((tx) =>
       tx.activityLog.create({

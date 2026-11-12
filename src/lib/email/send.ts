@@ -1,10 +1,7 @@
 import { Resend } from "resend";
 import type { Db } from "../db/client";
 import type { EmailTemplateKey } from "@/generated/prisma/client";
-
-function renderTemplate(body: string, variables: Record<string, string>): string {
-  return body.replace(/\{(\w+)\}/g, (match, key) => variables[key] ?? match);
-}
+import { renderTemplate } from "./templates";
 
 const escapeHtml = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
 
@@ -68,8 +65,11 @@ export async function sendTemplateEmail(
 
   try {
     const resend = new Resend(apiKey);
+    // FR-14.04: email balasan dari Pengaturan › Identitas; pengirim tetap env (domain terverifikasi)
+    const identity = (await tx.appSetting.findUnique({ where: { key: "identity" } }))?.value as { senderEmail?: string } | undefined;
     const result = await resend.emails.send({
       from: process.env.EMAIL_FROM ?? "LibCon <noreply@libcon.example>",
+      replyTo: identity?.senderEmail || undefined,
       to: params.to,
       subject,
       html,
