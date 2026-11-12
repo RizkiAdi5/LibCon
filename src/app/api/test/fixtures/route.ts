@@ -233,6 +233,11 @@ export async function POST(request: Request) {
               },
             });
             const q = await tx.questionnaire.create({ data: { periodId: period.id, title: "Survei Uji", status: "PUBLISHED", createdBy: SYSTEM_USER_ID } });
+            // M10: satu jadwal H-1 untuk Draf saja (jadwal default juga menyasar Belum Mengisi = ratusan lembaga uji lain)
+            const reminderTemplate = await tx.emailTemplate.findUniqueOrThrow({ where: { key: "REMINDER_DEADLINE" } });
+            await tx.reminderSchedule.create({
+              data: { periodId: period.id, kind: "DEADLINE", offsetDays: 1, targetStatuses: ["DRAFT"], templateId: reminderTemplate.id, createdBy: SYSTEM_USER_ID },
+            });
             const section = await tx.section.create({
               data: { questionnaireId: q.id, code: "koleksi", title: "Koleksi", evidenceLabel: "Folder 01_Koleksi", evidenceRequired: true, createdBy: SYSTEM_USER_ID },
             });
@@ -269,6 +274,17 @@ export async function POST(request: Request) {
             }),
           );
           return NextResponse.json({ ok: true });
+        }
+
+        case "latest-activity": {
+          const log = await prisma.activityLog.findFirst({ where: { activity: body.activity }, orderBy: { createdAt: "desc" } });
+          return NextResponse.json({ description: log?.description ?? null, metadata: log?.metadata ?? null });
+        }
+
+        case "email-count": {
+          const user = await prisma.user.findUniqueOrThrow({ where: { username: body.username } });
+          const count = await prisma.emailLog.count({ where: { institutionId: user.institutionId!, template: { key: body.key } } });
+          return NextResponse.json({ count, institutionId: user.institutionId });
         }
 
         case "submission-state": {

@@ -14,6 +14,16 @@ import { loadInstitutionFormOptions } from "../form-options";
 import { InstitutionForm } from "../institution-form";
 import { ACCOUNT_STATUS } from "@/lib/accountStatus";
 
+const ACTIVITY_LABEL: Record<string, string> = {
+  LOGIN: "Login",
+  LOGOUT: "Logout",
+  LOGIN_FAILED: "Login gagal",
+  ACCOUNT_LOCKED: "Akun terkunci",
+  PASSWORD_CHANGED: "Password dibuat/diganti (termasuk aktivasi)",
+  RESEND_ACTIVATION: "Kirim ulang aktivasi",
+  UNAUTHORIZED_ACCESS: "Percobaan akses tanpa izin",
+};
+
 export default async function DetailPesertaPage({
   params,
   searchParams,
@@ -40,6 +50,27 @@ export default async function DetailPesertaPage({
   ]);
   const now = new Date();
   const isInactive = Boolean(institution.deletedAt);
+
+  const userIds = institution.users.map((u) => u.id);
+  const usernameOf = new Map(institution.users.map((u) => [u.id, u.username]));
+  const [activities, emails, submissions] = await Promise.all([
+    prisma.activityLog.findMany({ where: { userId: { in: userIds } }, orderBy: { createdAt: "desc" }, take: 50 }),
+    prisma.emailLog.findMany({ where: { institutionId: institution.id }, include: { template: true }, orderBy: { createdAt: "desc" }, take: 50 }),
+    prisma.submission.findMany({ where: { institutionId: institution.id }, include: { period: true, revisionRequests: true } }),
+  ]);
+  const timeline = [
+    ...activities.map((a) => ({ at: a.createdAt, text: `${ACTIVITY_LABEL[a.activity] ?? a.activity} (${usernameOf.get(a.userId!) ?? "-"})` })),
+    ...emails.map((e) => ({ at: e.createdAt, text: `Email ${e.template.key.toLowerCase().replace(/_/g, " ")} ke ${e.toEmail} — ${e.status === "SENT" ? "terkirim" : e.status === "FAILED" ? "gagal" : e.status.toLowerCase()}` })),
+    ...submissions.flatMap((s) => [
+      ...(s.lastSavedAt ? [{ at: s.lastSavedAt, text: `Terakhir menyimpan isian ${s.period.name}` }] : []),
+      ...(s.firstSubmittedAt ? [{ at: s.firstSubmittedAt, text: `Mengirim survei ${s.period.name}` }] : []),
+      ...(s.lastSubmittedAt && s.lastSubmittedAt.getTime() !== s.firstSubmittedAt?.getTime() ? [{ at: s.lastSubmittedAt, text: `Mengirim ulang survei ${s.period.name}` }] : []),
+      ...s.revisionRequests.map((r) => ({ at: r.createdAt, text: `Revisi putaran ${r.round} dibuka (${s.period.name})` })),
+      ...(s.verifiedAt ? [{ at: s.verifiedAt, text: `Kiriman ${s.period.name} diverifikasi` }] : []),
+    ]),
+  ]
+    .sort((a, b) => b.at.getTime() - a.at.getTime())
+    .slice(0, 60);
 
   return (
     <div className="space-y-6">
@@ -167,6 +198,19 @@ export default async function DetailPesertaPage({
             impact="Semua akun lembaga ini langsung keluar dan tidak bisa login, dan lembaga tidak masuk report default. Data tetap tersimpan dan bisa dipulihkan."
           />
         )}
+      </section>
+
+      {/* FR-10.07: timeline aktivitas (aktivasi, login, simpan, kirim, revisi, email) */}
+      <section className="space-y-2">
+        <h2 className="font-semibold">Timeline aktivitas</h2>
+        {timeline.length === 0 && <p className="text-sm text-muted-foreground">Belum ada aktivitas.</p>}
+        <ol className="space-y-1 text-sm" data-testid="timeline">
+          {timeline.map((t, i) => (
+            <li key={i}>
+              <span className="text-muted-foreground">{formatWib(t.at)}</span> — {t.text}
+            </li>
+          ))}
+        </ol>
       </section>
     </div>
   );

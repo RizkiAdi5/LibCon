@@ -12,6 +12,8 @@ export default defineConfig({
   use: {
     baseURL: "http://localhost:3000",
     trace: "on-first-retry",
+    // aksi (klik/isi) gagal dengan pesan langkah yang jelas, bukan menunggu sampai batas waktu tes
+    actionTimeout: 30_000,
   },
   // periode.spec & survei.spec memakai state global (hanya satu periode OPEN, FR-02.05):
   // dijalankan berurutan lewat dependencies, terpisah dari spec lain yang boleh paralel

@@ -1,3 +1,4 @@
+import "dotenv/config"; // CRON_SECRET untuk memanggil endpoint cron
 import { test, expect, type Browser, type Page } from "@playwright/test";
 
 const TEST_PASSWORD = "KataSandiKuat!2026";
@@ -354,6 +355,63 @@ test("skoring: preset 30/70 → validasi bobot → aktifkan → uji → hitung r
   await expect(scores.getByRole("row", { name: /Perpus E2E/ })).toContainText("v2");
   await expect(admin.getByText(/v1 · Resmi · Selesai · 2 kiriman/)).toBeVisible();
   await expect(admin.getByText(/v2 · Resmi · Selesai · 2 kiriman/)).toBeVisible();
+
+  await fixture(page, { action: "close-e2e-periods" });
+});
+
+test("monitoring: kartu & filter, reminder massal tercatat, cron H-1 hanya Draf & maks sekali sehari, ekspor CSV, timeline [FR-10.01-10.07, AC M10]", async ({ page, browser }) => {
+  const { username: a, periodName } = await fixture(page, { action: "setup-open-survey", password: TEST_PASSWORD });
+  await login(page, a);
+  await page.goto("/portal/survei");
+  await page.waitForLoadState("networkidle");
+  await savedAfter(page, () => answer(page, "Jumlah judul *", "10")); // A = Draf
+  const other = await freshPage(browser);
+  const { username: c } = await fixture(other, { action: "create-active-participant", password: TEST_PASSWORD });
+  await login(other, c);
+  await fillAndSubmit(other, { judul: "1000", eksemplar: "2000", siswa: "400" }); // C = Terkirim
+
+  // FR-10.01: kartu memfilter tabel
+  const admin = await freshPage(browser);
+  await loginAdmin(admin);
+  await admin.goto("/admin/dashboard");
+  await admin.getByLabel("Periode").selectOption({ label: periodName });
+  await admin.getByRole("button", { name: "Tampilkan" }).click();
+  await expect(admin.getByTestId("card-Draf")).toContainText("1");
+  await expect(admin.getByTestId("card-Terkirim")).toContainText("1");
+  await admin.getByTestId("card-Draf").click();
+  await expect(admin).toHaveURL(/status=DRAFT/);
+  await expect(admin.getByRole("link", { name: /Perpus Survei/ })).toBeVisible();
+  await expect(admin.getByRole("link", { name: /Perpus E2E/ })).toHaveCount(0);
+  const periodId = new URL(admin.url()).searchParams.get("periode")!;
+
+  // FR-10.04 + AC M10: kirim reminder ke lembaga terpilih, tercatat di activity_logs dengan jumlah penerima
+  await admin.getByLabel(/Pilih Perpus Survei/).check();
+  await admin.getByRole("button", { name: "Kirim reminder" }).click();
+  await expect(admin.locator('p[role="status"]')).toContainText("Reminder dikirim ke 1 lembaga (1 email)");
+  const activity = await fixture(page, { action: "latest-activity", activity: "SEND_BULK_REMINDER" });
+  expect(activity.description).toContain("1 penerima");
+
+  // AC M10: cron H-1 → Draf dikirimi, Terkirim tidak; FR-10.06: A sudah dikirimi hari ini → tidak dobel
+  const cron = await page.request.get("/api/cron/reminders", { headers: { authorization: `Bearer ${process.env.CRON_SECRET}` } });
+  expect(cron.status()).toBe(200);
+  const countA = await fixture(page, { action: "email-count", username: a, key: "REMINDER_DEADLINE" });
+  const countC = await fixture(page, { action: "email-count", username: c, key: "REMINDER_DEADLINE" });
+  expect(countA.count).toBe(1);
+  expect(countC.count).toBe(0);
+
+  // FR-10.04: ekspor daftar
+  const csv = await admin.request.get(`/admin/dashboard/ekspor?periode=${periodId}&status=DRAFT`);
+  expect(csv.headers()["content-type"]).toContain("text/csv");
+  const text = await csv.text();
+  expect(text).toContain("Nama perpustakaan");
+  expect(text).toContain("Perpus Survei");
+  expect(text).not.toContain("Perpus E2E");
+
+  // FR-10.07: timeline aktivitas lembaga
+  await admin.goto(`/admin/peserta/${countA.institutionId}`);
+  await expect(admin.getByTestId("timeline")).toContainText("Login");
+  await expect(admin.getByTestId("timeline")).toContainText("Email reminder deadline");
+  await expect(admin.getByTestId("timeline")).toContainText("Terakhir menyimpan isian");
 
   await fixture(page, { action: "close-e2e-periods" });
 });

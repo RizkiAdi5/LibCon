@@ -66,6 +66,14 @@ Karena 98 FK `*_by → users.id` (dan semua trigger/CHECK/partial-index Tahap 3)
 - **DB lokal yang sebenarnya dipakai = PostgreSQL 18 native Windows** (`C:\Program Files\PostgreSQL\18`, layanan di `localhost:5432`, user `postgres`), BUKAN kontainer Docker `libcon-pg` — kontainer itu juga map port 5432 tapi kalah oleh layanan native, jadi kosong. Untuk query manual: `& "C:\Program Files\PostgreSQL\18\bin\psql.exe" -h localhost -U postgres -d libcon`.
 - `next dev` di Windows kadang **tidak me-reload modul `src/lib` yang diubah** (HMR) — gejalanya e2e gagal dengan perilaku kode lama. Restart dev server sebelum menyimpulkan ada bug.
 
+## Monitoring & reminder (Tahap 14, sudah diimplementasi & diuji)
+
+- Tidak ada migrasi. `src/lib/monitoring.ts` (murni): tanggal WIB (`wibDate`, `startOfWibDay`, `wibDaysUntil`), `reminderDueToday`, `monitoringStatus` (satu status per lembaga: Belum Aktivasi / status kiriman / Tidak Mengisi bila draf lewat tenggat — BR-12 hanya untuk TAMPILAN, status DB tidak diubah), `stackCounts`, `csvCell` (cegah formula injection).
+- Reminder (`src/lib/reminders.ts`, cron `/api/cron/reminders` harian 00.00 UTC = 07.00 WIB): DEADLINE = H-n sebelum tenggat berlaku per lembaga untuk status sasaran; ACTIVATION = n hari setelah akun dibuat, selalu dengan link aktivasi BARU; REVISION = H-n sebelum batas revisi. **FR-10.06**: template sama ke lembaga sama maks. sekali per hari WIB (cek `email_logs`) — berlaku juga untuk aksi massal. Jadwal default dipasang saat periode dibuat (`createDefaultSchedules`), ikut tersalin saat salin periode. `?now=` di route cron hanya aktif di development.
+- Dashboard `/admin/dashboard` (`loadMonitoring` di `src/lib/monitoringData.ts`): kartu = filter, grafik batang CSS (tanpa Recharts), tabel Kecamatan > Jenis, aksi massal (reminder → `SEND_BULK_REMINDER` dengan jumlah penerima; kirim ulang aktivasi via `resendActivations` di `lib/auth/activation.ts`), ekspor CSV `/admin/dashboard/ekspor`. Timeline aktivitas di detail lembaga (FR-10.07).
+- `next.config.ts` `devIndicators: false` — indikator "N" mode dev menutupi checkbox pojok kiri bawah. Playwright `actionTimeout: 30_000` supaya aksi macet gagal dengan pesan langkah, bukan timeout tes.
+- Fixture `setup-open-survey` memasang SATU jadwal H-1 untuk Draf saja (jadwal default menyasar Belum Mengisi = ratusan lembaga uji lain di DB lokal).
+
 ## Mesin skoring (Tahap 13, sudah diimplementasi & diuji)
 
 - Tidak ada migrasi. Mesin murni `src/lib/formula/scoring.ts` (`validateScheme`, `computeScores`, `normalize`, `rankBy`, `pickCategory`) — SATU-SATUNYA tempat skor dihitung. Rumus memakai whitelist mathjs yang sama dengan validasi (`analyzeExpression(..., FORMULA_FUNCTIONS)` + `evaluateNumber`); `MIN/MAX/IF/SUM/AVG/ROUND` gaya PRD dinormalisasi ke mathjs (`AVG`→`mean`, `IF`→`ifelse`).
