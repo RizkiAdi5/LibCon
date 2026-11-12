@@ -326,6 +326,7 @@ test("skoring: preset 30/70 → validasi bobot → aktifkan → uji → hitung r
   await expect(admin.getByTestId("official-scores")).toHaveCount(0); // uji tidak menyimpan skor resmi
 
   // FR-09.08: hitung resmi — B: rasio 5 → 0,5; judul terendah → 0 ⇒ 0,3 × 0,5 × 100 = 15
+  await admin.waitForLoadState("networkidle"); // buka <details> sebelum hidrasi → submit server action bisa hilang
   await admin.getByText("Hitung resmi", { exact: true }).click();
   await admin.getByRole("button", { name: "Ya, hitung resmi" }).click();
   await expect(flash(admin)).toContainText("Hitung resmi selesai: 2 kiriman");
@@ -355,6 +356,7 @@ test("skoring: preset 30/70 → validasi bobot → aktifkan → uji → hitung r
   await admin.getByText("Aktifkan skema", { exact: true }).click();
   await admin.getByRole("button", { name: "Ya, aktifkan" }).click();
   await admin.getByRole("link", { name: "Uji & hitung skor" }).click();
+  await admin.waitForLoadState("networkidle");
   await admin.getByText("Hitung resmi", { exact: true }).click();
   await admin.getByRole("button", { name: "Ya, hitung resmi" }).click();
   await expect(flash(admin)).toContainText("Hitung resmi selesai");
@@ -370,6 +372,7 @@ test("skoring: preset 30/70 → validasi bobot → aktifkan → uji → hitung r
   await expect(ranking.getByRole("row", { name: /Perpus E2E/ })).toBeVisible();
   await admin.getByLabel("Sekolah Dasar").check();
   await expect(admin).toHaveURL(/jenis=/);
+  await admin.waitForLoadState("networkidle"); // auto-submit filter butuh hidrasi halaman baru
   await admin.getByLabel("Rentang skor").selectOption("lolos");
   await expect(admin).toHaveURL(/skor=lolos/);
   await expect(ranking.getByRole("row", { name: /Perpus Survei/ })).toContainText("100,00");

@@ -18,7 +18,8 @@ export async function withDb<T>(fn: (tx: Db) => Promise<T>): Promise<T> {
       set_config('app.user_agent', ${ctx.userAgent ?? ""}, true),
       set_config('app.source', ${ctx.source}, true)`;
     return fn(tx as Db);
-  });
+    // default Prisma 5 dtk terlalu ketat untuk aksi massal (hitung resmi, aksi massal, impor) — terbukti terlampaui di e2e saat beban tinggi
+  }, { timeout: 15_000 });
 }
 
 export { Prisma };
