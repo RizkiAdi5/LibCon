@@ -2,11 +2,11 @@
 
 import { redirect } from "next/navigation";
 import { z } from "zod";
-import { Prisma, type UserRole } from "@/generated/prisma/client";
+import { Prisma } from "@/generated/prisma/client";
 import { prisma } from "@/lib/db/client";
 import { withDb } from "@/lib/db/withDb";
 import { requireRole, runAsUser } from "@/lib/auth/guard";
-import { sendActivation, sendPasswordReset } from "@/lib/auth/activation";
+import { resendActivations, resendSummary, sendActivation, sendPasswordReset } from "@/lib/auth/activation";
 import { destroyAllSessionsForUser } from "@/lib/auth/session";
 import {
   institutionSchema,
@@ -146,51 +146,6 @@ function backTo(path: string, params: Record<string, string>): never {
   redirect(`${path}?${new URLSearchParams(params)}`);
 }
 
-/**
- * Kirim ulang aktivasi ke akun utama lembaga-lembaga yang dipilih (FR-03.09).
- * Hanya akun PENDING_ACTIVATION di lembaga aktif; token lama dicabut (BR-03).
- * Setiap lembaga transaksi sendiri supaya satu kegagalan tidak membatalkan sisanya.
- */
-async function resendActivations(institutionIds: string[], actor: { id: string; role: UserRole }) {
-  const accounts = await prisma.user.findMany({
-    where: {
-      institutionId: { in: institutionIds },
-      isPrimary: true,
-      status: "PENDING_ACTIVATION",
-      deletedAt: null,
-      institution: { deletedAt: null, isActive: true },
-    },
-    include: { institution: true },
-  });
-
-  let failed = 0;
-  for (const account of accounts) {
-    try {
-      await withDb(async (tx) => {
-        await sendActivation(tx, account, actor.id);
-        await tx.activityLog.create({
-          data: {
-            userId: actor.id,
-            actorRole: actor.role,
-            activity: "RESEND_ACTIVATION",
-            description: `Kirim ulang aktivasi ke ${account.username}`,
-          },
-        });
-      });
-    } catch (error) {
-      console.error(`[peserta] gagal kirim ulang aktivasi ke ${account.username}`, error);
-      failed++;
-    }
-  }
-  return { sent: accounts.length - failed, skipped: institutionIds.length - accounts.length, failed };
-}
-
-function resendSummary({ sent, skipped, failed }: { sent: number; skipped: number; failed: number }): Record<string, string> {
-  const parts = [`Link aktivasi dikirim ulang ke ${sent} lembaga.`];
-  if (skipped) parts.push(`${skipped} dilewati (akun sudah aktif atau lembaga nonaktif).`);
-  if (failed) parts.push(`${failed} gagal dikirim, coba lagi.`);
-  return failed ? { error: parts.join(" ") } : { ok: parts.join(" ") };
-}
 
 export async function resendActivationAction(formData: FormData) {
   const user = await requireRole(["ADMIN", "SUPER_ADMIN"]);
