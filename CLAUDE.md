@@ -72,6 +72,8 @@ Karena 98 FK `*_by → users.id` (dan semua trigger/CHECK/partial-index Tahap 3)
 - Filter field tunggal (`skor`, `flag`, `skorMin/Max`) dibungkus `single()` — `URLSearchParams.getAll` memberi array dan sempat membuat filter skor hilang diam-diam di ekspor (ditemukan e2e).
 - `/admin/report`: form filter auto-submit (GET), filter tersimpan (`saved_report_filters`, pribadi/dibagikan, hapus hanya milik sendiri), ranking keseluruhan/jenis/kecamatan, grafik CSS/SVG (tanpa Recharts), radar (`src/components/radar-chart.tsx`), analitik jawaban angka. Ekspor `/admin/report/ekspor/{excel,pdf,rapor}` — semua tercatat `activity_logs` (`EXPORT_REPORT` + filter & jumlah baris; rapor tunggal `DOWNLOAD_RAPOR`).
 - Ekspor IPLM: Provinsi & KEW_NORM dari `app_settings.iplm_export` (seed); klasifikasi hanya SD/SMP (TBM kosong — `shortcut:` di `report.ts`); `Indeks_Final_0_100` kosong (Q3); kolom `j_*`/`tambah_*` terisi hanya bila kode soal kuesioner sama dengan nama kolom IPLM.
+- `withDb()` kini memakai `timeout: 15_000` (default Prisma 5 dtk terlampaui saat beban tinggi → P2028). Kalau ada aksi massal yang lebih lama, pecah per batch, jangan naikkan terus.
+- e2e: klik `<details>`/filter auto-submit hanya setelah `waitForLoadState("networkidle")` — sebelum hidrasi, submit server action/auto-submit bisa hilang.
 - Portal `/portal/skor-saya` (FR-12.01–12.05): sebelum `scoresPublished` → "Penilaian sedang diproses"; ranking hanya jika `show_ranking_to_participants`; rapor `/portal/skor-saya/rapor?periode=` cek publikasi + lembaga dari sesi. PDF di `src/lib/pdf/reportPdf.tsx` belum memuat logo (aset belum ada).
 
 ## Monitoring & reminder (Tahap 14, sudah diimplementasi & diuji)
