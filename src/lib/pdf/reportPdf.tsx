@@ -75,6 +75,38 @@ export function renderSummaryPdf(rows: ReportRow[], filterLabel: string) {
   );
 }
 
+/** FR-07.10: lampiran email tanda terima — waktu kirim + ringkasan jawaban soal yang tampil. */
+export function renderReceiptPdf(r: {
+  libraryName: string;
+  npp: string;
+  periodName: string;
+  submittedAt: Date;
+  submitterName: string;
+  sections: { title: string; evidenceUrl: string; rows: { code: string; label: string; answer: string }[] }[];
+}) {
+  return renderToBuffer(
+    <Document title={`Tanda terima ${r.libraryName}`}>
+      <Page size="A4" style={s.page}>
+        <Text style={s.h1}>Tanda Terima Pengiriman Survei</Text>
+        <Text>{r.libraryName}</Text>
+        <Text style={s.muted}>
+          NPP {r.npp} · {r.periodName}
+        </Text>
+        <Text style={{ marginTop: 6 }}>
+          Dikirim {formatWib(r.submittedAt)} oleh {r.submitterName}
+        </Text>
+        {r.sections.map((sec) => (
+          <View key={sec.title}>
+            <Text style={s.h2}>{sec.title}</Text>
+            {sec.evidenceUrl && <Text style={s.muted}>Bukti dukung: {sec.evidenceUrl}</Text>}
+            <Table widths={[20, 50, 30]} header={["Kode", "Soal", "Jawaban"]} rows={sec.rows.map((x) => [x.code, x.label, x.answer || "–"])} />
+          </View>
+        ))}
+      </Page>
+    </Document>,
+  );
+}
+
 /** Rapor satu lembaga; `peers` = kiriman berskor jenis yang sama di periode yang sama (pembanding rata-rata). */
 export function renderRaporPdf(row: Scored, peers: ReportRow[], showRanking: boolean, identity: IdentitySettings) {
   const nodes = Object.entries(row.score.nodeInfo ?? {}).sort(([a, x], [b, y]) => (x.level === y.level ? a.localeCompare(b) : x.level === "DIMENSION" ? -1 : 1));

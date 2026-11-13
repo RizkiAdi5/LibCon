@@ -4,7 +4,9 @@ import { z } from "zod";
 import { Prisma } from "@/generated/prisma/client";
 import { withDb } from "@/lib/db/withDb";
 import { requireRole, runAsUser } from "@/lib/auth/guard";
-import { encodeAnswer, parseAnswerKey, type StoredAnswer } from "@/lib/answers";
+import { encodeAnswer, evidenceKey, parseAnswerKey, type StoredAnswer } from "@/lib/answers";
+import { formatAnswer } from "@/lib/answerFormat";
+import { renderReceiptPdf } from "@/lib/pdf/reportPdf";
 import { checkSubmission, loadParticipantSurvey } from "@/lib/participantSurvey";
 import { prisma } from "@/lib/db/client";
 import { sendTemplateEmail } from "@/lib/email/send";
@@ -239,6 +241,25 @@ export async function submitSurveyAction(_prev: SubmitState, formData: FormData)
   // email di luar transaksi: kiriman tetap tercatat walau email gagal
   try {
     const accounts = await prisma.user.findMany({ where: { institutionId: survey.institution.id, deletedAt: null, status: "ACTIVE" } });
+    // FR-07.10: ringkasan jawaban (soal yang tampil) sebagai lampiran PDF; gagal render → email tetap terkirim tanpa lampiran
+    const receipt = await renderReceiptPdf({
+      libraryName: survey.institution.libraryName,
+      npp: survey.institution.npp,
+      periodName: survey.period.name,
+      submittedAt: now,
+      submitterName: parsed.data.submitterName,
+      sections: survey.definition.sections
+        .map((s) => ({
+          title: s.title,
+          evidenceUrl: String(survey.answers[evidenceKey("section", s.id)] ?? ""),
+          rows: s.questions.filter((q) => check.visible.has(q.id)).map((q) => ({ code: q.code, label: q.label, answer: formatAnswer(q, survey.answers[q.id]) })),
+        }))
+        .filter((s) => s.rows.length),
+    }).catch((error) => {
+      console.error("[survei] gagal membuat PDF tanda terima", error);
+      return null;
+    });
+    const attachments = receipt ? [{ filename: `tanda-terima-${survey.institution.npp}.pdf`, content: receipt }] : undefined;
     await runAsUser(user, () =>
       withDb(async (tx) => {
         for (const account of accounts) {
@@ -251,6 +272,7 @@ export async function submitSurveyAction(_prev: SubmitState, formData: FormData)
             institutionId: survey.institution.id,
             relatedType: "submission",
             relatedId: survey.submission?.id,
+            attachments,
           });
         }
       }),

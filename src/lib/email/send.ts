@@ -28,6 +28,7 @@ export async function sendTemplateEmail(
     institutionId?: string;
     relatedType?: string;
     relatedId?: string;
+    attachments?: { filename: string; content: Buffer }[];
   },
 ): Promise<void> {
   const template = await tx.emailTemplate.findUnique({ where: { key: params.key } });
@@ -55,7 +56,7 @@ export async function sendTemplateEmail(
   const apiKey = process.env.RESEND_API_KEY;
   if (!apiKey) {
     // Dev tanpa akun Resend: jangan blokir alur, tandai terkirim + cetak ke konsol.
-    console.log(`[email:dev] ke ${params.to} — ${subject}\n${html}`);
+    console.log(`[email:dev] ke ${params.to} — ${subject}${params.attachments?.length ? ` (+${params.attachments.map((a) => a.filename).join(", ")})` : ""}\n${html}`);
     await tx.emailLog.update({
       where: { id: log.id },
       data: { status: "SENT", sentAt: new Date(), updatedBy: params.createdBy },
@@ -70,6 +71,7 @@ export async function sendTemplateEmail(
     const result = await resend.emails.send({
       from: process.env.EMAIL_FROM ?? "LibCon <noreply@libcon.example>",
       replyTo: identity?.senderEmail || undefined,
+      attachments: params.attachments,
       to: params.to,
       subject,
       html,
