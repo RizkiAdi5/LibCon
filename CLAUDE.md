@@ -81,6 +81,11 @@ Karena 98 FK `*_by → users.id` (dan semua trigger/CHECK/partial-index Tahap 3)
 - Tidak ada migrasi. **BR-12**: `markNotSubmitted()` (`periodTransitions.ts`, dipanggil `runPeriodTransitions` → cron `period-status`) mengubah DRAFT → `NOT_SUBMITTED` bila tenggat BERLAKU lembaga (`effectiveClosesAt`, termasuk perpanjangan khusus) lewat, untuk periode OPEN/CLOSED. Lembaga tanpa baris kiriman tidak dibuatkan baris. `NOT_SUBMITTED` yang tenggatnya diperpanjang/periode dibuka lagi diperlakukan seperti draf: `surveyMode` = editable, autosave mengembalikan ke DRAFT, `monitoringStatus`/beranda/reminder menghitungnya Draf.
 - **FR-07.10**: `renderReceiptPdf` (`src/lib/pdf/reportPdf.tsx`) — waktu kirim, pengisi, jawaban soal yang tampil (`check.visible`) per bagian + link bukti; dilampirkan ke email `SUBMISSION_RECEIPT` lewat `sendTemplateEmail({ attachments })` (diteruskan ke Resend). Gagal render → email tetap terkirim tanpa lampiran. Mode dev mencetak nama lampiran di console.
 
+## Nonaktifkan akun kedua (Tahap 19, FR-05.08, sudah diimplementasi & diuji)
+
+- Tidak ada migrasi: permintaan disimpan di `institution_change_requests` (tabel ERD generik yang sebelumnya belum terpakai) dengan `changes = { type: "DISABLE_SECOND_ACCOUNT", userId, username }` (`DISABLE_SECOND_ACCOUNT` di `src/lib/validation/accountRequest.ts`; filter Prisma `changes: { path: ["type"], equals: ... }`). Fitur "ajukan koreksi profil" nanti memakai tabel yang sama dengan `type` lain.
+- Portal Akun: hanya akun UTAMA (dicek dari DB) yang melihat form; satu permintaan PENDING per lembaga; status menunggu/ditolak + catatan admin tampil. Admin memproses di `/admin/permintaan-akun` (badge menu ikut menghitung): setuju = akun kedua DISABLED + semua sesinya dihapus (target diverifikasi ulang: akun non-utama lembaga yang sama); tolak wajib catatan. Tidak ada email (belum ada template untuk ini).
+
 ## Partisi log (Tahap 17b, FR-13.08, disetujui user)
 
 - Migrasi SQL murni `20261113000000_partition_logs` + `20261113000100_partition_fn_definer`: `audit_logs` & `activity_logs` = `PARTITION BY RANGE (created_at)` per bulan (`<tabel>_YYYY_MM`) + partisi `_default` (jaring pengaman). PK jadi `(id, created_at)` → `schema.prisma` `@@id([id, createdAt])`. Data lama dipindah utuh, sequence id lanjut; terverifikasi 20.580/2.314 baris, 112 FK `*_by` utuh.

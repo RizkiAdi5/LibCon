@@ -15,6 +15,14 @@ export const rejectAccountRequestSchema = z.object({
   reason: z.string().trim().min(1, "Alasan penolakan wajib diisi"),
 });
 
+/**
+ * FR-05.08: permintaan nonaktifkan akun kedua disimpan di `institution_change_requests`
+ * (tabel ERD yang generik: `changes` jsonb + alasan + status/review) dengan tipe ini.
+ */
+export const DISABLE_SECOND_ACCOUNT = "DISABLE_SECOND_ACCOUNT";
+export type DisableSecondAccountChange = { type: typeof DISABLE_SECOND_ACCOUNT; userId: string; username: string };
+export const disableSecondAccountSchema = z.object({ reason: z.string().trim().min(5, "Alasan minimal 5 karakter").max(500) });
+
 /** FR-05.01: tombol tampil hanya jika < 2 akun dan tidak ada permintaan yang menunggu. */
 export function canRequestSecondAccount(params: { accountCount: number; hasPendingRequest: boolean }): boolean {
   return params.accountCount < MAX_PARTICIPANT_ACCOUNTS && !params.hasPendingRequest;

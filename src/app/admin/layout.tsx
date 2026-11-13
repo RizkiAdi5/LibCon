@@ -3,10 +3,13 @@ import Link from "next/link";
 import { requireRole } from "@/lib/auth/guard";
 import { prisma } from "@/lib/db/client";
 import { logoutAction } from "@/lib/auth/actions";
+import { DISABLE_SECOND_ACCOUNT } from "@/lib/validation/accountRequest";
 
 export default async function AdminLayout({ children }: { children: ReactNode }) {
   const user = await requireRole(["ADMIN", "SUPER_ADMIN"]);
-  const pendingRequests = await prisma.accountRequest.count({ where: { status: "PENDING" } });
+  const pendingRequests =
+    (await prisma.accountRequest.count({ where: { status: "PENDING" } })) +
+    (await prisma.institutionChangeRequest.count({ where: { status: "PENDING", changes: { path: ["type"], equals: DISABLE_SECOND_ACCOUNT } } }));
 
   return (
     <div className="min-h-screen">

@@ -9,7 +9,14 @@ import { hashPassword, verifyPassword } from "@/lib/auth/password";
 import { checkPasswordPolicy } from "@/lib/auth/passwordPolicy";
 import { destroyOtherSessions, SESSION_COOKIE_NAME } from "@/lib/auth/session";
 import { getPasswordPolicy } from "@/lib/settings";
-import { accountRequestSchema, canRequestSecondAccount } from "@/lib/validation/accountRequest";
+import { redirect } from "next/navigation";
+import {
+  accountRequestSchema,
+  canRequestSecondAccount,
+  DISABLE_SECOND_ACCOUNT,
+  disableSecondAccountSchema,
+  type DisableSecondAccountChange,
+} from "@/lib/validation/accountRequest";
 
 export type AccountRequestState = { error?: string; success?: boolean };
 
@@ -48,6 +55,32 @@ export async function requestSecondAccountAction(
     ),
   );
   return { success: true };
+}
+
+/**
+ * FR-05.08: hanya akun UTAMA yang bisa meminta admin menonaktifkan akun kedua lembaganya.
+ * Akun & lembaga selalu dari sesi/DB; satu permintaan menunggu pada satu waktu.
+ */
+export async function requestDisableSecondAccountAction(formData: FormData) {
+  const sessionUser = await requireRole(["PARTICIPANT"]);
+  const back = (params: Record<string, string>): never => redirect(`/portal/akun?${new URLSearchParams(params)}`);
+  const parsed = disableSecondAccountSchema.safeParse({ reason: formData.get("reason") });
+  if (!parsed.success) back({ error: parsed.error.issues[0].message });
+  const institutionId = sessionUser.institutionId!;
+  const [me, second, pending] = await Promise.all([
+    prisma.user.findUniqueOrThrow({ where: { id: sessionUser.id } }),
+    prisma.user.findFirst({ where: { institutionId, isPrimary: false, deletedAt: null, status: { not: "DISABLED" } } }),
+    prisma.institutionChangeRequest.findFirst({ where: { institutionId, status: "PENDING", changes: { path: ["type"], equals: DISABLE_SECOND_ACCOUNT } } }),
+  ]);
+  if (!me.isPrimary) back({ error: "Hanya akun utama yang bisa mengajukan penonaktifan akun kedua." });
+  if (!second) back({ error: "Tidak ada akun kedua yang aktif." });
+  if (pending) back({ error: "Permintaan penonaktifan masih menunggu admin." });
+
+  const changes: DisableSecondAccountChange = { type: DISABLE_SECOND_ACCOUNT, userId: second!.id, username: second!.username };
+  await runAsUser(sessionUser, () =>
+    withDb((tx) => tx.institutionChangeRequest.create({ data: { institutionId, requestedById: me.id, changes, reason: parsed.data!.reason, createdBy: me.id } })),
+  );
+  back({ ok: `Permintaan menonaktifkan ${second!.username} dikirim ke admin.` });
 }
 
 const changePasswordSchema = z.object({

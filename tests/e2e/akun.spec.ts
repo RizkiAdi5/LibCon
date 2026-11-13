@@ -91,8 +91,23 @@ test.describe("Akun kedua [FR-05.01-05.06, BR-02]", () => {
 
     // AC M05: sudah 2 akun → form ajukan tidak tampil
     await page.goto("/portal/akun");
-    await expect(page.getByText(`${username}-2`)).toBeVisible();
+    await expect(page.getByText(`${username}-2 —`)).toBeVisible();
     await expect(page.getByRole("button", { name: "Ajukan akun tambahan" })).toHaveCount(0);
+
+    // FR-05.08: akun kedua tidak bisa meminta; akun utama minta admin menonaktifkan akun kedua
+    await second.goto("/portal/akun");
+    await expect(second.getByRole("button", { name: "Kirim permintaan ke admin" })).toHaveCount(0);
+    await page.waitForLoadState("networkidle");
+    await page.getByLabel("Alasan", { exact: true }).fill("Pengisi kedua sudah pindah tugas");
+    await page.getByRole("button", { name: "Kirim permintaan ke admin" }).click();
+    await expect(page.locator('p[role="status"]')).toContainText(`Permintaan menonaktifkan ${username}-2 dikirim ke admin`);
+    await expect(page.getByText("sedang menunggu admin")).toBeVisible();
+
+    await admin.goto("/admin/permintaan-akun");
+    await admin.locator("li").filter({ hasText: `${username}-2` }).getByRole("button", { name: `Nonaktifkan ${username}-2` }).click();
+    await expect(admin.locator('p[role="status"]')).toContainText(`Akun ${username}-2 dinonaktifkan`);
+    await second.goto("/portal/beranda");
+    await expect(second).toHaveURL(/\/login/); // sesi akun kedua diakhiri
   });
 
   test("admin tolak dengan alasan → peserta melihat alasannya dan bisa mengajukan lagi [FR-05.05]", async ({

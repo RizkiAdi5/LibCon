@@ -7,7 +7,8 @@ import { withDb } from "@/lib/db/withDb";
 import { requireRole, runAsUser } from "@/lib/auth/guard";
 import { sendActivation } from "@/lib/auth/activation";
 import { sendTemplateEmail } from "@/lib/email/send";
-import { MAX_PARTICIPANT_ACCOUNTS, rejectAccountRequestSchema } from "@/lib/validation/accountRequest";
+import { DISABLE_SECOND_ACCOUNT, MAX_PARTICIPANT_ACCOUNTS, rejectAccountRequestSchema, type DisableSecondAccountChange } from "@/lib/validation/accountRequest";
+import { destroyAllSessionsForUser } from "@/lib/auth/session";
 
 const PATH = "/admin/permintaan-akun";
 
@@ -130,4 +131,40 @@ export async function rejectAccountRequestAction(formData: FormData) {
     ok = `Permintaan ${request.fullName} ditolak, tetapi email penolakan gagal dikirim.`;
   }
   back({ ok });
+}
+
+/**
+ * FR-05.08: proses permintaan akun utama menonaktifkan akun kedua. Setuju = status DISABLED + sesi
+ * dihapus (sama dengan "Nonaktifkan akun" di detail lembaga); tolak wajib dengan catatan (tampil di portal).
+ */
+export async function reviewDisableRequestAction(formData: FormData) {
+  const user = await requireRole(["ADMIN", "SUPER_ADMIN"]);
+  const parsed = z
+    .object({ requestId: z.uuid(), decision: z.enum(["approve", "reject"]), note: z.string().trim().max(500).optional() })
+    .safeParse({ requestId: formData.get("requestId"), decision: formData.get("decision"), note: formData.get("note") ?? undefined });
+  if (!parsed.success) back({ error: "Permintaan tidak valid" });
+  const { requestId, decision, note } = parsed.data;
+  const request = await prisma.institutionChangeRequest.findFirst({
+    where: { id: requestId, status: "PENDING", changes: { path: ["type"], equals: DISABLE_SECOND_ACCOUNT } },
+  });
+  if (!request) back({ error: "Permintaan tidak ditemukan atau sudah diproses" });
+  if (decision === "reject" && !note) back({ error: "Catatan penolakan wajib diisi" });
+  const change = request.changes as DisableSecondAccountChange;
+  // akun target diverifikasi ulang: harus akun kedua dari lembaga yang sama
+  const target = await prisma.user.findFirst({ where: { id: change.userId, institutionId: request.institutionId, isPrimary: false, deletedAt: null } });
+  if (decision === "approve" && !target) back({ error: "Akun kedua tidak ditemukan" });
+
+  await runAsUser(user, () =>
+    withDb(async (tx) => {
+      if (decision === "approve") {
+        await tx.user.update({ where: { id: target!.id }, data: { status: "DISABLED", updatedBy: user.id } });
+        await destroyAllSessionsForUser(tx, target!.id);
+      }
+      await tx.institutionChangeRequest.update({
+        where: { id: request.id },
+        data: { status: decision === "approve" ? "APPROVED" : "REJECTED", reviewedById: user.id, reviewedAt: new Date(), reviewNote: note || null, updatedBy: user.id },
+      });
+    }),
+  );
+  back({ ok: decision === "approve" ? `Akun ${change.username} dinonaktifkan.` : `Permintaan menonaktifkan ${change.username} ditolak.` });
 }
