@@ -1,14 +1,30 @@
-import { Document, Page, StyleSheet, Text, View, renderToBuffer } from "@react-pdf/renderer";
+import { readFileSync } from "node:fs";
+import path from "node:path";
+import { Document, Image, Page, StyleSheet, Text, View, renderToBuffer } from "@react-pdf/renderer";
 import { formatWib } from "../date";
 import { MONITORING_STATUS } from "../monitoring";
 import { groupMean, histogram, type ReportRow } from "../report";
 import type { IdentitySettings } from "../settings";
 
 /**
- * PDF ringkas report (FR-11.06) & rapor per peserta (FR-11.06, FR-12.04).
- * shortcut: rapor belum memuat logo LibCon / Perpustakaan Kota (file logo belum ada) dan
- * radar digambar sebagai tabel nilai; tambahkan <Image>/<Svg> begitu aset tersedia.
+ * PDF ringkas report (FR-11.06), rapor per peserta (FR-11.06, FR-12.04), tanda terima (FR-07.10).
+ * shortcut: logo LibCon belum ada (header hanya banner Kota Pontianak + DISPERPUSIP) dan radar digambar sebagai tabel
+ * nilai; tambahkan begitu aset LibCon tersedia.
  */
+
+// file ikut dibundel ke fungsi server lewat outputFileTracingIncludes (next.config.ts); hilang → PDF tanpa logo
+const LOGO = (() => {
+  try {
+    return `data:image/png;base64,${readFileSync(path.join(process.cwd(), "public/logo-disperpusip.png")).toString("base64")}`;
+  } catch {
+    return null;
+  }
+})();
+
+function Logo() {
+  // eslint-disable-next-line jsx-a11y/alt-text -- Image react-pdf (isi PDF), bukan <img> HTML; tidak punya prop alt
+  return LOGO ? <Image src={LOGO} style={{ width: 180, marginBottom: 8 }} /> : null;
+}
 
 const s = StyleSheet.create({
   page: { padding: 32, fontSize: 9, fontFamily: "Helvetica" },
@@ -56,6 +72,7 @@ export function renderSummaryPdf(rows: ReportRow[], filterLabel: string) {
   return renderToBuffer(
     <Document title="Laporan ringkas LibCon">
       <Page size="A4" style={s.page}>
+        <Logo />
         <Text style={s.h1}>Laporan Ringkas Lomba Perpustakaan</Text>
         <Text style={s.muted}>Dicetak {formatWib(new Date())} · {filterLabel}</Text>
         <Text style={s.h2}>Status pengisian ({rows.length} lembaga)</Text>
@@ -87,6 +104,7 @@ export function renderReceiptPdf(r: {
   return renderToBuffer(
     <Document title={`Tanda terima ${r.libraryName}`}>
       <Page size="A4" style={s.page}>
+        <Logo />
         <Text style={s.h1}>Tanda Terima Pengiriman Survei</Text>
         <Text>{r.libraryName}</Text>
         <Text style={s.muted}>
@@ -114,6 +132,7 @@ export function renderRaporPdf(row: Scored, peers: ReportRow[], showRanking: boo
   return renderToBuffer(
     <Document title={`Rapor ${row.libraryName}`}>
       <Page size="A4" style={s.page}>
+        <Logo />
         {identity.libraryName && (
           <Text style={s.muted}>
             {identity.libraryName}

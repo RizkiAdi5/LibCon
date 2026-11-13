@@ -1,3 +1,5 @@
+// @vitest-environment node
+// PDF dibuat di server (Node); di jsdom Buffer/Uint8Array beda realm sehingga react-pdf gagal membaca gambar
 import { describe, expect, it } from "vitest";
 import { renderReceiptPdf } from "@/lib/pdf/reportPdf";
 
@@ -13,5 +15,6 @@ describe("PDF tanda terima [FR-07.10]", () => {
     });
     expect(pdf.subarray(0, 5).toString()).toBe("%PDF-");
     expect(pdf.length).toBeGreaterThan(1000);
+    expect(pdf.includes("/Subtype /Image")).toBe(true); // FR-12.04: logo Kota Pontianak tertanam
   });
 });

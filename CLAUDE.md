@@ -74,7 +74,8 @@ Karena 98 FK `*_by → users.id` (dan semua trigger/CHECK/partial-index Tahap 3)
 - **Template email** (FR-14.02): katalog `TEMPLATE_INFO` di `src/lib/email/templates.ts` = variabel yang benar-benar diisi kode pengirim — tambah variabel di sana hanya bersamaan dengan mengisinya di pemanggil. Variabel tak dikenal ditolak saat simpan. Pratinjau di `<iframe sandbox="">` (HTML template tidak bisa menjalankan skrip). Toggle aktif/nonaktif sengaja tidak ada (template nonaktif membuat alur aktivasi/reset error).
 - **Keamanan** (FR-14.03): password/lockout/sesi lewat form `grup.field` → `settings-actions.ts`. **Identitas** (FR-14.04) juga mengatur `iplm_export`. Logo belum (belum ada penyimpanan file).
 - e2e `pengaturan.spec.ts` (project chromium, paralel): JANGAN ubah nilai pengaturan global di tes — simpan ulang nilai asli (tes lain berjalan bersamaan). Baris tabel besar: pakai `locator("tr", { hasText })`, bukan `getByRole("row", { name })` (lambat di ratusan baris).
-- Belum: petunjuk bukti dukung (FR-14.05, menunggu Q1).
+- **Q1 dijawab user (2026-11-13):** bukti dukung tidak bisa dibuat satu format/template — admin tetap memeriksa satu per satu. FR-14.05 cukup dipenuhi petunjuk bukti per bagian di builder kuesioner (`sections.evidence_label`); tidak ada fitur template pusat.
+- **Logo**: banner lambang Kota Pontianak + DISPERPUSIP (Dinas Perpustakaan & Kearsipan) di `public/logo-disperpusip.png` (dipangkas dari file user, tinggi 120 px) tampil di header semua PDF (rapor, tanda terima, laporan ringkas, lebar 180 pt) — dibaca dari disk sebagai data URI, ikut ke fungsi server lewat `outputFileTracingIncludes` di `next.config.ts`. Logo LibCon belum ada. Tes PDF wajib `// @vitest-environment node` (jsdom membuat react-pdf gagal membaca gambar).
 
 ## Tidak Mengisi & lampiran tanda terima (Tahap 18, sudah diimplementasi & diuji)
 
