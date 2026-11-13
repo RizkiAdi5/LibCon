@@ -297,7 +297,9 @@ test("skoring: preset 30/70 → validasi bobot → aktifkan → uji → hitung r
   await admin.getByRole("button", { name: `Buat skema baru (preset 30/70) untuk ${periodName}` }).click();
   await expect(flash(admin)).toContainText("Skema dibuat dari preset 30/70");
   const problems = admin.getByTestId("scheme-problems");
-  await expect(problems).toContainText("Kepatuhan belum punya node anak.");
+  // default gaya IPLM: Kepatuhan ← Koleksi/SDM, Kinerja ← Pelayanan/Pengelolaan; kuesioner uji tanpa kode IPLM → subdimensi kosong
+  await expect(problems).toContainText("Koleksi belum punya node anak.");
+  await expect(problems).not.toContainText("Kepatuhan belum punya node anak.");
 
   // indikator: rasio eksemplar per siswa (target 10) & jumlah judul (min-max antar peserta)
   await addNode(admin, { level: "INDICATOR", code: "i_rasio", name: "Rasio eksemplar per siswa", formula: "j_eksemplar / j_siswa", normalization: "TARGET_RATIO", target: "10" });

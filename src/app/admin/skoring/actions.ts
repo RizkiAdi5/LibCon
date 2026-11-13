@@ -55,8 +55,9 @@ export async function createSchemeAction(formData: FormData) {
   if (!periodId.success) backTo("/admin/skoring", { error: "Periode tidak valid" });
   const period = await prisma.surveyPeriod.findFirst({ where: { id: periodId.data, deletedAt: null } });
   if (!period) backTo("/admin/skoring", { error: "Periode tidak ditemukan" });
-  const scheme = await runAsUser(user, () => withDb((tx) => createPresetScheme(tx, period.id, Number(period.passingScore), user.id)));
-  backTo(pathOf(scheme.id), { ok: "Skema dibuat dari preset 30/70. Lengkapi indikator sesuai juknis sebelum diaktifkan." });
+  const variables = await loadVariables(period.id);
+  const scheme = await runAsUser(user, () => withDb((tx) => createPresetScheme(tx, period.id, Number(period.passingScore), user.id, variables)));
+  backTo(pathOf(scheme.id), { ok: "Skema dibuat dari preset 30/70 (aturan default gaya IPLM). Periksa & ubah indikator/bobot sebelum diaktifkan." });
 }
 
 /** FR-09.09 versi baru dari skema mana pun, atau FR-09.12 salin skema periode lalu ke periode ini. */

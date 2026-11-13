@@ -1,5 +1,6 @@
 import { prisma, type Db } from "./db/client";
 import type { EdgeDef, NormParams, ScoreNodeDef, VariableDef } from "./formula/scoring";
+import { presetIndicators } from "./formula/iplmPreset";
 
 /** Skema + node/edge/override/kategori dalam bentuk mesin skor. */
 export async function loadScheme(schemeId: string) {
@@ -107,25 +108,29 @@ export async function copyScheme(tx: Db, sourceId: string, target: { periodId: s
 
 /**
  * Preset awal PRD §5.8 / ERD: Indeks Dasar = 0,30 Kepatuhan + 0,70 Kinerja, empat
- * subdimensi. Indikator & pemetaan subdimensi→dimensi menunggu juknis (PRD §12 Q2),
- * jadi preset sengaja belum bisa diaktifkan sebelum admin melengkapinya.
+ * subdimensi + indikator default gaya IPLM (`iplmPreset.ts`) untuk kode soal IPLM yang ada di kuesioner
+ * periode. Subdimensi tanpa soal yang cocok tetap kosong → skema belum bisa diaktifkan sampai admin melengkapinya.
  */
-export async function createPresetScheme(tx: Db, periodId: string, passingScore: number, actorId: string) {
+export async function createPresetScheme(tx: Db, periodId: string, passingScore: number, actorId: string, variables: Awaited<ReturnType<typeof loadVariables>>) {
   const scheme = await tx.scoringScheme.create({ data: { periodId, name: "Skema IPLM (preset 30/70)", version: 1, createdBy: actorId } });
-  const mk = (level: "INDEX" | "DIMENSION" | "SUBDIMENSION", code: string, name: string, sortOrder: number, isRoot = false) =>
-    tx.scoreNode.create({ data: { schemeId: scheme.id, level, code, name, isRoot, sortOrder, createdBy: actorId } });
-  const index = await mk("INDEX", "indeks_dasar", "Indeks Dasar", 0, true);
-  const kepatuhan = await mk("DIMENSION", "dim_kepatuhan", "Kepatuhan", 1);
-  const kinerja = await mk("DIMENSION", "dim_kinerja", "Kinerja", 2);
-  for (const [i, [code, name]] of [["sub_koleksi", "Koleksi"], ["sub_sdm", "SDM"], ["sub_pelayanan", "Pelayanan"], ["sub_pengelolaan", "Pengelolaan"]].entries()) {
-    await mk("SUBDIMENSION", code, name, 3 + i);
+  let order = 0;
+  const mk = (level: "INDEX" | "DIMENSION" | "SUBDIMENSION" | "INDICATOR", code: string, name: string, extra: object = {}) =>
+    tx.scoreNode.create({ data: { schemeId: scheme.id, level, code, name, sortOrder: order++, createdBy: actorId, ...extra } });
+  const edge = (parentNodeId: string, childNodeId: string, weight: number) => ({ parentNodeId, childNodeId, weight, createdBy: actorId });
+  const index = await mk("INDEX", "indeks_dasar", "Indeks Dasar", { isRoot: true });
+  const dims = { dim_kepatuhan: await mk("DIMENSION", "dim_kepatuhan", "Kepatuhan"), dim_kinerja: await mk("DIMENSION", "dim_kinerja", "Kinerja") };
+  // bobot terbukti dari docs/data-contoh-iplm.xlsx (lihat iplmPreset.ts); semua tetap bisa diubah selama Draf
+  const edges = [edge(index.id, dims.dim_kepatuhan.id, 0.3), edge(index.id, dims.dim_kinerja.id, 0.7)];
+  for (const sub of presetIndicators(variables)) {
+    // subdimensi = rata-rata indikatornya (default), indikator = Yeo-Johnson + min-max (Q2)
+    const node = await mk("SUBDIMENSION", sub.code, sub.name, { aggregation: "AVERAGE" });
+    edges.push(edge(dims[sub.dimension].id, node.id, 0.5));
+    for (const q of sub.available) {
+      const ind = await mk("INDICATOR", `i_${q.code}`, q.label, { formula: q.code, normalization: "YEO_JOHNSON" });
+      edges.push(edge(node.id, ind.id, Math.round(10_000 / sub.available.length) / 10_000));
+    }
   }
-  await tx.scoreNodeEdge.createMany({
-    data: [
-      { parentNodeId: index.id, childNodeId: kepatuhan.id, weight: 0.3, createdBy: actorId },
-      { parentNodeId: index.id, childNodeId: kinerja.id, weight: 0.7, createdBy: actorId },
-    ],
-  });
+  await tx.scoreNodeEdge.createMany({ data: edges });
   // FR-09.10 contoh "≥ 70 Lolos Nasional" — batas dari pengaturan periode (FR-02.08)
   await tx.scoreCategory.createMany({
     data: [
