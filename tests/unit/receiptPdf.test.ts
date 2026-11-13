@@ -15,6 +15,7 @@ describe("PDF tanda terima [FR-07.10]", () => {
     });
     expect(pdf.subarray(0, 5).toString()).toBe("%PDF-");
     expect(pdf.length).toBeGreaterThan(1000);
-    expect(pdf.includes("/Subtype /Image")).toBe(true); // FR-12.04: logo Kota Pontianak tertanam
+    // FR-12.04: banner Kota Pontianak + DISPERPUSIP dan logo LibCon tertanam
+    expect(pdf.toString("latin1").split("/Subtype /Image").length - 1).toBeGreaterThanOrEqual(2);
   });
 });

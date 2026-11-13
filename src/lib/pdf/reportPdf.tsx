@@ -8,23 +8,31 @@ import type { IdentitySettings } from "../settings";
 
 /**
  * PDF ringkas report (FR-11.06), rapor per peserta (FR-11.06, FR-12.04), tanda terima (FR-07.10).
- * shortcut: logo LibCon belum ada (header hanya banner Kota Pontianak + DISPERPUSIP) dan radar digambar sebagai tabel
- * nilai; tambahkan begitu aset LibCon tersedia.
+ * Header: banner Kota Pontianak + DISPERPUSIP (kiri) dan logo LibCon (kanan).
+ * shortcut: radar di rapor digambar sebagai tabel nilai, bukan grafik.
  */
 
-// file ikut dibundel ke fungsi server lewat outputFileTracingIncludes (next.config.ts); hilang → PDF tanpa logo
-const LOGO = (() => {
+// file ikut dibundel ke fungsi server lewat outputFileTracingIncludes (next.config.ts); hilang → PDF tanpa logo itu
+function dataUri(file: string) {
   try {
-    return `data:image/png;base64,${readFileSync(path.join(process.cwd(), "public/logo-disperpusip.png")).toString("base64")}`;
+    return `data:image/png;base64,${readFileSync(path.join(process.cwd(), "public", file)).toString("base64")}`;
   } catch {
     return null;
   }
-})();
-
-function Logo() {
-  // eslint-disable-next-line jsx-a11y/alt-text -- Image react-pdf (isi PDF), bukan <img> HTML; tidak punya prop alt
-  return LOGO ? <Image src={LOGO} style={{ width: 180, marginBottom: 8 }} /> : null;
 }
+const LOGO_DINAS = dataUri("logo-disperpusip.png");
+const LOGO_LIBCON = dataUri("logo-libcon.png");
+
+/* eslint-disable jsx-a11y/alt-text -- Image react-pdf (isi PDF), bukan <img> HTML; tidak punya prop alt */
+function Logo() {
+  return (
+    <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+      {LOGO_DINAS ? <Image src={LOGO_DINAS} style={{ width: 180 }} /> : <View />}
+      {LOGO_LIBCON && <Image src={LOGO_LIBCON} style={{ height: 40 }} />}
+    </View>
+  );
+}
+/* eslint-enable jsx-a11y/alt-text */
 
 const s = StyleSheet.create({
   page: { padding: 32, fontSize: 9, fontFamily: "Helvetica" },
