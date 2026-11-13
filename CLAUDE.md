@@ -74,7 +74,21 @@ Karena 98 FK `*_by → users.id` (dan semua trigger/CHECK/partial-index Tahap 3)
 - **Template email** (FR-14.02): katalog `TEMPLATE_INFO` di `src/lib/email/templates.ts` = variabel yang benar-benar diisi kode pengirim — tambah variabel di sana hanya bersamaan dengan mengisinya di pemanggil. Variabel tak dikenal ditolak saat simpan. Pratinjau di `<iframe sandbox="">` (HTML template tidak bisa menjalankan skrip). Toggle aktif/nonaktif sengaja tidak ada (template nonaktif membuat alur aktivasi/reset error).
 - **Keamanan** (FR-14.03): password/lockout/sesi lewat form `grup.field` → `settings-actions.ts`. **Identitas** (FR-14.04) juga mengatur `iplm_export`. Logo belum (belum ada penyimpanan file).
 - e2e `pengaturan.spec.ts` (project chromium, paralel): JANGAN ubah nilai pengaturan global di tes — simpan ulang nilai asli (tes lain berjalan bersamaan). Baris tabel besar: pakai `locator("tr", { hasText })`, bukan `getByRole("row", { name })` (lambat di ratusan baris).
-- Belum: partisi bulanan log & retensi 5 tahun (FR-13.08 — butuh migrasi partisi tabel log, perlu keputusan), tab Riwayat per objek + pulihkan soft delete (FR-13.06/13.09), petunjuk bukti dukung (FR-14.05, menunggu Q1).
+- Belum: petunjuk bukti dukung (FR-14.05, menunggu Q1).
+
+## Partisi log (Tahap 17b, FR-13.08, disetujui user)
+
+- Migrasi SQL murni `20261113000000_partition_logs` + `20261113000100_partition_fn_definer`: `audit_logs` & `activity_logs` = `PARTITION BY RANGE (created_at)` per bulan (`<tabel>_YYYY_MM`) + partisi `_default` (jaring pengaman). PK jadi `(id, created_at)` → `schema.prisma` `@@id([id, createdAt])`. Data lama dipindah utuh, sequence id lanjut; terverifikasi 20.580/2.314 baris, 112 FK `*_by` utuh.
+- `ensure_log_partitions(months_ahead, from_month)` — `SECURITY DEFINER` (libcon_app tidak punya CREATE di `public`), EXECUTE hanya untuk libcon_app; dipanggil cron reminder harian (3 bulan ke depan, gagal tidak menahan reminder). Jangan biarkan partisi `_default` berisi baris bulan mendatang — CREATE partisi bulan itu akan gagal.
+- **Append-only**: `ALTER DEFAULT PRIVILEGES` Tahap 3 memberi UPDATE/DELETE ke libcon_app pada SETIAP tabel baru, termasuk partisi → fungsi & migrasi selalu `REVOKE UPDATE, DELETE, TRUNCATE` per partisi. Terverifikasi: libcon_app ditolak UPDATE langsung ke `audit_logs_2026_11`.
+- Retensi minimal 5 tahun = tidak ada penghapusan otomatis; partisi > 5 tahun boleh di-`DETACH` & diarsip manual oleh DBA.
+- `prisma migrate diff` terhadap DB tidak menunjukkan drift di tabel log. Tetap: hasil `--create-only` yang menyentuh `audit_logs`/`activity_logs`/partisinya harus dihapus manual seperti 98 `DROP CONSTRAINT`.
+
+## Riwayat & pulihkan (Tahap 17, sudah diimplementasi & diuji)
+
+- Tidak ada migrasi. `RecordHistory` (`src/components/record-history.tsx`, server component, `<details>` tertutup) = tab Riwayat FR-13.06 dari `audit_logs` via `loadRecordHistory(targets)` (`activityLogData.ts`, 50 terbaru, label record dari `code/name/title/...`). Terpasang di detail lembaga (lembaga + akun), kiriman (kiriman, revisi, flag), soal (soal, aturan, opsi, logika tampil), builder kuesioner (kuesioner, bagian, soal — termasuk yang dihapus), skema skor (skema, node, kategori), jenis peserta.
+- Pulihkan (FR-13.09): `restoreAction` (`src/app/admin/riwayat-actions.ts`, `returnTo` dibatasi `/admin/...`) → `restoreRecord` (`src/lib/restore.ts`) dengan whitelist + aturan per tabel: soal & aturan validasi hanya saat kuesioner Draf (kode soal tidak boleh bentrok), kategori skor hanya saat skema Draf, jenis peserta. Peran per tabel di `RESTORE_ROLES`. Tombol muncul hanya bila SOFT_DELETE masih kejadian terakhir record itu. Node skor sengaja tidak bisa dipulihkan (kode diganti & edge dilepas saat hapus). Lembaga punya alur "Pulihkan lembaga" sendiri.
+- e2e: entri Riwayat (tersembunyi) ikut cocok dengan `locator("li", { hasText })` → pakai `li:visible`. Halaman dengan Riwayat lebih berat → `waitForLoadState("networkidle")` sebelum membuka `<details>`/ConfirmAction.
 
 ## Report & Skor Saya (Tahap 15, sudah diimplementasi & diuji)
 
