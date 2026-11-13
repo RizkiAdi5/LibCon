@@ -4,6 +4,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { FlashMessage } from "@/components/flash-message";
 import { ConfirmAction } from "@/components/confirm-action";
+import { RecordHistory } from "@/components/record-history";
 import {
   createInstitutionTypeAction,
   deleteInstitutionTypeAction,
@@ -21,6 +22,7 @@ export default async function JenisPesertaPage({
     where: { deletedAt: null },
     orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
   });
+  const allTypeIds = (await prisma.institutionType.findMany({ select: { id: true } })).map((t) => t.id);
 
   return (
     <div className="space-y-6">
@@ -74,6 +76,8 @@ export default async function JenisPesertaPage({
           </li>
         ))}
       </ul>
+
+      <RecordHistory targets={[{ table: "institution_types", ids: allTypeIds }]} labels={{ institution_types: "jenis peserta" }} returnTo="/admin/pengaturan/jenis-peserta" role="SUPER_ADMIN" />
     </div>
   );
 }

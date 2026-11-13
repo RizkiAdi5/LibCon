@@ -8,6 +8,7 @@ import { diffAnswers, evidenceKey } from "@/lib/answers";
 import { formatAnswer } from "@/lib/answerFormat";
 import { SUBMISSION_STATUS } from "@/lib/submissionStatus";
 import { loadSubmissionForReview, scoresPublished } from "@/lib/submissionReview";
+import { RecordHistory } from "@/components/record-history";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -261,6 +262,17 @@ export default async function DetailKirimanPage({
           </table>
         )}
       </section>
+
+      <RecordHistory
+        targets={[
+          { table: "submissions", ids: [submission.id] },
+          { table: "revision_requests", ids: submission.revisionRequests.map((r) => r.id) },
+          { table: "validation_results", ids: submission.validationResults.map((v) => v.id) },
+        ]}
+        labels={{ submissions: "kiriman", revision_requests: "permintaan revisi", validation_results: "flag validasi" }}
+        returnTo={`/admin/verifikasi/${submission.id}`}
+        role={user.role}
+      />
     </div>
   );
 }

@@ -136,6 +136,7 @@ test.describe("Master data [FR-02.01, FR-02.02]", () => {
     const superAdmin = await createAdmin(page, "SUPER_ADMIN");
     await login(page, superAdmin, /\/admin\/dashboard/);
     await page.goto("/admin/pengaturan/jenis-peserta");
+    await page.waitForLoadState("networkidle"); // <details> konfirmasi dibuka sebelum hidrasi → klik hilang
 
     const sd = page.locator("li").filter({ has: page.getByLabel("Nama Sekolah Dasar") });
     await sd.getByText("Hapus", { exact: true }).click();
@@ -148,6 +149,7 @@ test.describe("Master data [FR-02.01, FR-02.02]", () => {
     await page.getByLabel("Nama", { exact: true }).fill(`Jenis Uji ${code}`);
     await page.getByRole("button", { name: "Tambah jenis" }).click();
     await expect(page.getByRole("status")).toContainText(`Jenis Uji ${code} ditambahkan`);
+    await page.waitForLoadState("networkidle");
 
     const row = page.locator("li").filter({ has: page.getByLabel(`Nama Jenis Uji ${code}`) });
     await row.getByText("Hapus", { exact: true }).click();

@@ -121,6 +121,29 @@ async function addIntegerQuestion(page: Page, section: string, label: string, co
   await expect(flash(page)).toContainText(`Soal ${code} ditambahkan`);
 }
 
+test("riwayat kuesioner: soal dihapus saat Draf → Pulihkan dari tab Riwayat [FR-13.06, FR-13.09]", async ({ page }) => {
+  await loginSuperAdmin(page);
+  await createQuestionnaire(page);
+  const builderUrl = page.url().split("?")[0];
+  await addSection(page, "Koleksi");
+  await addIntegerQuestion(page, "Koleksi", "Jumlah rak", "j_rak");
+  await page.goto(builderUrl);
+  await page.waitForLoadState("networkidle");
+  // :visible — entri Riwayat (tersembunyi dalam <details>) juga memuat teks j_rak
+  const row = page.locator("li:visible", { hasText: "j_rak" }).last();
+  await row.getByText("Hapus", { exact: true }).click();
+  await row.getByRole("button", { name: "Ya, hapus j_rak" }).click();
+  await expect(flash(page)).toContainText("Soal dihapus");
+  await expect(page.locator("li:visible", { hasText: "j_rak" })).toHaveCount(0);
+
+  await page.waitForLoadState("networkidle");
+  const history = page.getByTestId("record-history");
+  await history.getByText(/^Riwayat/).click();
+  await history.locator("li", { hasText: "Hapus (soft)" }).filter({ hasText: "j_rak" }).getByRole("button", { name: "Pulihkan" }).click();
+  await expect(flash(page)).toContainText("Soal j_rak dipulihkan");
+  await expect(page.getByText("j_rak", { exact: true }).first()).toBeVisible();
+});
+
 test("aturan validasi + uji nilai + logika tampil tanpa siklus [FR-06.05, FR-06.06, AC M06]", async ({ page }) => {
   await loginSuperAdmin(page);
   await createQuestionnaire(page);
@@ -170,7 +193,8 @@ test("aturan validasi + uji nilai + logika tampil tanpa siklus [FR-06.05, FR-06.
 });
 
 async function openQuestion(page: Page, code: string) {
-  await page.locator("li", { has: page.locator("code", { hasText: new RegExp(`^${code}$`) }) }).last().getByRole("link", { name: /Ubah|Lihat/ }).click();
+  // :visible — entri Riwayat (tersembunyi dalam <details>) juga memuat <code> kode soal
+  await page.locator("li:visible", { has: page.locator("code", { hasText: new RegExp(`^${code}$`) }) }).last().getByRole("link", { name: /Ubah|Lihat/ }).click();
 }
 
 test("pratinjau per jenis, terbit + struktur terkunci, duplikat, salin periode [FR-06.09-06.11, FR-02.06, AC M06]", async ({ page }) => {
@@ -204,7 +228,7 @@ test("pratinjau per jenis, terbit + struktur terkunci, duplikat, salin periode [
   await page.goto(builderUrl);
   await page.getByRole("button", { name: "Duplikat j_judul" }).click();
   await expect(flash(page)).toContainText("Soal diduplikat");
-  await expect(page.getByText("j_judul_2", { exact: true })).toBeVisible();
+  await expect(page.getByText("j_judul_2", { exact: true }).first()).toBeVisible(); // first: Riwayat (di bawah) juga memuat kodenya
 
   // FR-06.09 + AC M06: sebagai TBM soal j_siswa tidak tampil dan tidak dihitung di progres
   await page.getByRole("link", { name: "Pratinjau sebagai peserta" }).click();

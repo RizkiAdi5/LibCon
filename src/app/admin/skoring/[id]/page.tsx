@@ -10,6 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { FlashMessage } from "@/components/flash-message";
 import { ConfirmAction } from "@/components/confirm-action";
+import { RecordHistory } from "@/components/record-history";
 import {
   activateSchemeAction,
   copySchemeAction,
@@ -37,10 +38,13 @@ export default async function SkemaPage({ params, searchParams }: { params: Prom
   const loaded = await loadScheme(id);
   if (!loaded) notFound();
   const { scheme, nodes, edges, categories } = loaded;
-  const [variables, types] = await Promise.all([
+  const [variables, types, historyNodes, historyCategories] = await Promise.all([
     loadVariables(scheme.periodId),
     prisma.institutionType.findMany({ where: { deletedAt: null }, orderBy: [{ sortOrder: "asc" }, { name: "asc" }] }),
+    prisma.scoreNode.findMany({ where: { schemeId: scheme.id }, select: { id: true } }),
+    prisma.scoreCategory.findMany({ where: { schemeId: scheme.id }, select: { id: true } }),
   ]);
+  const history = { nodes: historyNodes, categories: historyCategories };
   const editable = user.role === "SUPER_ADMIN" && scheme.status === "DRAFT";
   const problems = validateScheme(nodes, edges, variables);
   const byId = new Map(nodes.map((n) => [n.id, n]));
@@ -344,6 +348,17 @@ export default async function SkemaPage({ params, searchParams }: { params: Prom
           </form>
         )}
       </section>
+
+      <RecordHistory
+        targets={[
+          { table: "scoring_schemes", ids: [scheme.id] },
+          { table: "score_nodes", ids: history.nodes.map((n) => n.id) },
+          { table: "score_categories", ids: history.categories.map((c) => c.id) },
+        ]}
+        labels={{ scoring_schemes: "skema", score_nodes: "node", score_categories: "kategori" }}
+        returnTo={`/admin/skoring/${scheme.id}`}
+        role={user.role}
+      />
     </div>
   );
 }

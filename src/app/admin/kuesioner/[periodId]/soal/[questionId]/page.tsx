@@ -10,6 +10,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { FlashMessage } from "@/components/flash-message";
 import { ConfirmAction } from "@/components/confirm-action";
+import { RecordHistory } from "@/components/record-history";
+import { requireRole } from "@/lib/auth/guard";
 import { deleteConditionAction, saveConditionAction } from "../../../actions";
 import { loadQuestionEditor } from "../load";
 import { QuestionForm } from "../question-form";
@@ -46,6 +48,13 @@ export default async function UbahSoalPage({
     prisma.institutionType.findMany({ where: { deletedAt: null }, orderBy: { sortOrder: "asc" }, select: { code: true } }),
   ]);
   if (!question) notFound();
+  const [user, rules, options, conditions] = await Promise.all([
+    requireRole(["ADMIN", "SUPER_ADMIN"]),
+    prisma.validationRule.findMany({ where: { questionId: question.id }, select: { id: true } }),
+    prisma.questionOption.findMany({ where: { questionId: question.id }, select: { id: true } }),
+    prisma.questionCondition.findMany({ where: { questionId: question.id }, select: { id: true } }),
+  ]);
+  const related = { rules, options, conditions };
   const ref = { id: question.id, code: question.code, label: question.label, type: question.type };
 
   return (
@@ -158,6 +167,19 @@ export default async function UbahSoalPage({
           </form>
         )}
       </section>
+
+      {/* FR-13.06/13.09: termasuk aturan, opsi & kondisi yang sudah dihapus (bisa dipulihkan saat Draf) */}
+      <RecordHistory
+        targets={[
+          { table: "questions", ids: [question.id] },
+          { table: "validation_rules", ids: related.rules.map((r) => r.id) },
+          { table: "question_options", ids: related.options.map((o) => o.id) },
+          { table: "question_conditions", ids: related.conditions.map((c) => c.id) },
+        ]}
+        labels={{ questions: "soal", validation_rules: "aturan", question_options: "opsi", question_conditions: "logika tampil" }}
+        returnTo={`/admin/kuesioner/${periodId}/soal/${question.id}`}
+        role={user.role}
+      />
     </div>
   );
 }

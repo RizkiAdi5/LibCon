@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { z } from "zod";
 import { prisma } from "@/lib/db/client";
 import { requireRole } from "@/lib/auth/guard";
+import { RecordHistory } from "@/components/record-history";
 import { QUESTION_TYPE_LABEL, type BuilderQuestionType } from "@/lib/questionnaire";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -19,7 +20,7 @@ export default async function BuilderPage({
   params: Promise<{ periodId: string }>;
   searchParams: Promise<{ ok?: string; error?: string }>;
 }) {
-  await requireRole(["ADMIN", "SUPER_ADMIN"]);
+  const user = await requireRole(["ADMIN", "SUPER_ADMIN"]);
   const [{ periodId }, { ok, error }] = await Promise.all([params, searchParams]);
   if (!z.uuid().safeParse(periodId).success) notFound();
 
@@ -41,6 +42,11 @@ export default async function BuilderPage({
     },
   });
   if (!questionnaire) notFound();
+  const [allSections, allQuestions] = await Promise.all([
+    prisma.section.findMany({ where: { questionnaireId: questionnaire.id }, select: { id: true } }),
+    prisma.question.findMany({ where: { questionnaireId: questionnaire.id }, select: { id: true } }),
+  ]);
+  const allIds = { sections: allSections.map((s) => s.id), questions: allQuestions.map((q) => q.id) };
 
   const published = questionnaire.status === "PUBLISHED";
   const archived = questionnaire.period.status === "ARCHIVED";
@@ -134,6 +140,18 @@ export default async function BuilderPage({
           </form>
         </section>
       )}
+
+      {/* FR-13.06/13.09: riwayat kuesioner, bagian & soal — soal yang dihapus bisa dipulihkan dari sini saat Draf */}
+      <RecordHistory
+        targets={[
+          { table: "questionnaires", ids: [questionnaire.id] },
+          { table: "sections", ids: allIds.sections },
+          { table: "questions", ids: allIds.questions },
+        ]}
+        labels={{ questionnaires: "kuesioner", sections: "bagian", questions: "soal" }}
+        returnTo={`/admin/kuesioner/${periodId}`}
+        role={user.role}
+      />
     </div>
   );
 }

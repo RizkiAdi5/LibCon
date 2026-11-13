@@ -105,6 +105,35 @@ test("template email: variabel tak dikenal ditolak, simpan, pratinjau, kirim uji
   await expect(flash(page, "status")).toContainText("Email uji dikirim ke");
 });
 
+test("riwayat jenis peserta: hapus → Pulihkan dari tab Riwayat [FR-13.06, FR-13.09]", async ({ browser }) => {
+  const { page } = await superAdmin(browser);
+  const code = `R${randomUUID().slice(0, 6).toUpperCase()}`;
+  const name = `Jenis Pulih ${code}`;
+  await page.goto("/admin/pengaturan/jenis-peserta");
+  await page.waitForLoadState("networkidle");
+  await page.getByLabel("Kode", { exact: true }).fill(code);
+  await page.getByLabel("Nama", { exact: true }).fill(name);
+  await page.getByRole("button", { name: "Tambah jenis" }).click();
+  await expect(flash(page, "status")).toContainText(`Jenis ${name} ditambahkan`);
+  await page.waitForLoadState("networkidle");
+  const item = page.locator("li:visible", { hasText: code }).first();
+  await item.getByText("Hapus", { exact: true }).click();
+  await item.getByRole("button", { name: `Ya, hapus ${name}` }).click();
+  await expect(flash(page, "status")).toContainText("Jenis peserta dihapus");
+  await expect(page.getByLabel(`Nama ${name}`)).toHaveCount(0);
+
+  await page.waitForLoadState("networkidle");
+  const history = page.getByTestId("record-history");
+  await history.getByText(/^Riwayat/).click();
+  const entry = history.locator("li", { hasText: "Hapus (soft)" }).filter({ hasText: code }).first();
+  await entry.getByRole("button", { name: "Pulihkan" }).click();
+  await expect(flash(page, "status")).toContainText(`Jenis peserta ${name} dipulihkan`);
+  await expect(page.getByLabel(`Nama ${name}`)).toBeVisible();
+  // setelah dipulihkan, kejadian terakhir record itu = RESTORE → tombol Pulihkan tidak muncul lagi
+  await page.getByTestId("record-history").getByText(/^Riwayat/).click();
+  await expect(page.getByTestId("record-history").locator("li", { hasText: code }).getByRole("button", { name: "Pulihkan" })).toHaveCount(0);
+});
+
 test("keamanan & identitas: simpan nilai tetap tervalidasi [FR-14.03, FR-14.04]", async ({ browser }) => {
   const { page } = await superAdmin(browser);
   await page.goto("/admin/pengaturan/keamanan");

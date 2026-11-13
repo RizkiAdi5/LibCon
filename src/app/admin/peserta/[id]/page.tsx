@@ -14,6 +14,7 @@ import { loadInstitutionFormOptions } from "../form-options";
 import { InstitutionForm } from "../institution-form";
 import { ACCOUNT_STATUS } from "@/lib/accountStatus";
 import { ACTIVITY_LABEL } from "@/lib/activityLog";
+import { RecordHistory } from "@/components/record-history";
 
 
 export default async function DetailPesertaPage({
@@ -204,6 +205,16 @@ export default async function DetailPesertaPage({
           ))}
         </ol>
       </section>
+
+      <RecordHistory
+        targets={[
+          { table: "institutions", ids: [institution.id] },
+          { table: "users", ids: userIds },
+        ]}
+        labels={{ institutions: "data lembaga", users: "akun" }}
+        returnTo={`/admin/peserta/${institution.id}`}
+        role={user.role}
+      />
     </div>
   );
 }
