@@ -7,7 +7,7 @@ import { analyzeExpression, evaluateNumber, findConditionCycle, FORMULA_FUNCTION
  */
 
 export type NodeLevel = "INDICATOR" | "SUBDIMENSION" | "DIMENSION" | "INDEX";
-export type Normalization = "NONE" | "TARGET_RATIO" | "MIN_MAX" | "THRESHOLD_TABLE" | "OPTION_SCORE";
+export type Normalization = "NONE" | "TARGET_RATIO" | "MIN_MAX" | "THRESHOLD_TABLE" | "OPTION_SCORE" | "YEO_JOHNSON";
 export type Aggregation = "WEIGHTED_SUM" | "AVERAGE" | "FORMULA";
 export type ThresholdRange = { min: number; max: number | null; score: number };
 export type NormParams = { target?: number; ranges?: ThresholdRange[] };
@@ -99,7 +99,50 @@ function reachesRoot(id: string, edges: EdgeDef[], rootId: string | undefined, s
 
 // ---------------------------------------------------------------- normalisasi (FR-09.04)
 
-export function normalize(kind: Normalization, raw: number | null, params: NormParams | null, population?: { min: number; max: number }): number {
+/** Transformasi Yeo-Johnson (1 nilai, lambda tertentu) — rumus standar, juga dipakai scipy.stats.yeojohnson. */
+export function yeoJohnson(x: number, lambda: number): number {
+  if (x >= 0) return Math.abs(lambda) < EPS ? Math.log1p(x) : (Math.pow(x + 1, lambda) - 1) / lambda;
+  return Math.abs(lambda - 2) < EPS ? -Math.log1p(-x) : -(Math.pow(1 - x, 2 - lambda) - 1) / (2 - lambda);
+}
+
+/**
+ * Lambda Yeo-Johnson dengan maximum likelihood (log-likelihood normal seperti scipy):
+ * llf(λ) = −n/2·ln(var(y)) + (λ−1)·Σ sign(x)·ln(1+|x|). Dicari dengan golden-section di [−5, 5].
+ * Data terlalu sedikit/seragam → 1 (transformasi identitas + geser).
+ */
+export function yeoJohnsonLambda(xs: number[]): number {
+  if (xs.length < 3 || Math.max(...xs) - Math.min(...xs) < EPS) return 1;
+  const logTerm = xs.reduce((s, x) => s + Math.sign(x) * Math.log1p(Math.abs(x)), 0);
+  const llf = (l: number) => {
+    const ys = xs.map((x) => yeoJohnson(x, l));
+    const mean = ys.reduce((s, y) => s + y, 0) / ys.length;
+    const variance = ys.reduce((s, y) => s + (y - mean) ** 2, 0) / ys.length;
+    return variance > 0 && Number.isFinite(variance) ? (-ys.length / 2) * Math.log(variance) + (l - 1) * logTerm : -Infinity;
+  };
+  let [a, b] = [-5, 5];
+  const g = (Math.sqrt(5) - 1) / 2;
+  for (let i = 0; i < 100 && b - a > 1e-6; i++) {
+    const c = b - g * (b - a);
+    const d = a + g * (b - a);
+    if (llf(c) > llf(d)) b = d;
+    else a = c;
+  }
+  return (a + b) / 2;
+}
+
+export type Population = { min: number; max: number; lambda?: number; tmin?: number; tmax?: number };
+
+/** Populasi satu indikator untuk normalisasi relatif (min-max, Yeo-Johnson). */
+export function populationOf(values: number[], kind: Normalization): Population | undefined {
+  if (!values.length) return undefined;
+  const base = { min: Math.min(...values), max: Math.max(...values) };
+  if (kind !== "YEO_JOHNSON") return base;
+  const lambda = yeoJohnsonLambda(values);
+  const t = values.map((v) => yeoJohnson(v, lambda));
+  return { ...base, lambda, tmin: Math.min(...t), tmax: Math.max(...t) };
+}
+
+export function normalize(kind: Normalization, raw: number | null, params: NormParams | null, population?: Population): number {
   if (raw === null) return 0; // keputusan Tahap 13: tidak ada data = 0
   switch (kind) {
     case "TARGET_RATIO":
@@ -108,6 +151,12 @@ export function normalize(kind: Normalization, raw: number | null, params: NormP
       if (!population) return 0;
       // keputusan Tahap 13: semua peserta bernilai sama → 1
       return population.max - population.min < EPS ? 1 : (raw - population.min) / (population.max - population.min);
+    case "YEO_JOHNSON": {
+      // Q2 (Perpusnas, 2026-11-13): data IPLM dirapikan dengan Yeo-Johnson lalu dinormalisasi → min-max 0–1
+      if (!population || population.lambda === undefined) return 0;
+      const span = population.tmax! - population.tmin!;
+      return span < EPS ? 1 : Math.min(Math.max((yeoJohnson(raw, population.lambda) - population.tmin!) / span, 0), 1);
+    }
     case "THRESHOLD_TABLE": {
       const hit = (params?.ranges ?? []).find((r) => raw >= r.min && (r.max === null || raw < r.max));
       return hit?.score ?? 0;
@@ -156,7 +205,7 @@ export function computeScores(scheme: { nodes: ScoreNodeDef[]; edges: EdgeDef[];
   const population = new Map(
     indicators.map((n) => {
       const values = participants.map((p) => raws.get(p.submissionId)!.get(n.id)).filter((v): v is number => v !== null);
-      return [n.id, values.length ? { min: Math.min(...values), max: Math.max(...values) } : undefined];
+      return [n.id, populationOf(values, n.normalization)];
     }),
   );
 

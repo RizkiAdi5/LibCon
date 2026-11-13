@@ -112,7 +112,7 @@ const nodeSchema = z.object({
   code: z.string().trim().regex(/^[a-z][a-z0-9_]*$/, "Kode node: huruf kecil, angka, garis bawah, diawali huruf").max(50),
   name: z.string().trim().min(1, "Nama node wajib diisi").max(200),
   formula: z.string().trim().max(500).transform((v) => v || null),
-  normalization: z.enum(["NONE", "TARGET_RATIO", "MIN_MAX", "THRESHOLD_TABLE", "OPTION_SCORE"]),
+  normalization: z.enum(["NONE", "TARGET_RATIO", "MIN_MAX", "THRESHOLD_TABLE", "OPTION_SCORE", "YEO_JOHNSON"]),
   aggregation: z.enum(["WEIGHTED_SUM", "AVERAGE", "FORMULA"]),
 });
 

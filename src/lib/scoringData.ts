@@ -150,5 +150,6 @@ export const NORMALIZATION_LABEL = {
   MIN_MAX: "Min-max antar peserta",
   THRESHOLD_TABLE: "Tabel ambang",
   OPTION_SCORE: "Nilai opsi",
+  YEO_JOHNSON: "Yeo-Johnson + min-max (gaya IPLM)",
 } as const;
 export const AGGREGATION_LABEL = { WEIGHTED_SUM: "Jumlah berbobot", AVERAGE: "Rata-rata", FORMULA: "Rumus" } as const;

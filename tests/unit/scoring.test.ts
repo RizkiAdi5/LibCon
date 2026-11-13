@@ -1,5 +1,45 @@
 import { describe, expect, it } from "vitest";
-import { computeScores, normalize, pickCategory, rankBy, validateScheme, type EdgeDef, type ScoreNodeDef, type VariableDef } from "@/lib/formula/scoring";
+import {
+  computeScores,
+  normalize,
+  pickCategory,
+  populationOf,
+  rankBy,
+  validateScheme,
+  yeoJohnson,
+  yeoJohnsonLambda,
+  type EdgeDef,
+  type ScoreNodeDef,
+  type VariableDef,
+} from "@/lib/formula/scoring";
+
+describe("normalisasi Yeo-Johnson [Q2, FR-09.04]", () => {
+  // nilai acuan dari scipy.stats.yeojohnson (Python) untuk data yang sama
+  it("lambda MLE sama dengan scipy", () => {
+    expect(yeoJohnsonLambda([0, 12, 45, 120, 300, 900, 2500, 7000])).toBeCloseTo(0.07699076363442214, 4);
+    expect(yeoJohnsonLambda([-3, -1, 0, 2, 5, 40])).toBeCloseTo(0.30062760156878315, 4);
+  });
+
+  it("transformasi: λ=1 identitas untuk x≥0, λ=0 → ln(1+x), cabang negatif", () => {
+    expect(yeoJohnson(5, 1)).toBeCloseTo(5);
+    expect(yeoJohnson(5, 0)).toBeCloseTo(Math.log(6));
+    expect(yeoJohnson(-3, 2)).toBeCloseTo(-Math.log(4));
+  });
+
+  it("hasil 0–1 urut sama, data condong ke kanan jadi lebih merata dibanding min-max", () => {
+    const xs = [0, 12, 45, 120, 300, 900, 2500, 7000];
+    const yj = populationOf(xs, "YEO_JOHNSON");
+    const mm = populationOf(xs, "MIN_MAX");
+    const a = xs.map((x) => normalize("YEO_JOHNSON", x, null, yj));
+    const b = xs.map((x) => normalize("MIN_MAX", x, null, mm));
+    expect(a[0]).toBe(0);
+    expect(a.at(-1)).toBeCloseTo(1);
+    expect([...a].sort((p, q) => p - q)).toEqual(a); // urutan peringkat dipertahankan
+    expect(a[3]).toBeGreaterThan(b[3] + 0.3); // nilai menengah tidak lagi menempel di 0
+    expect(normalize("YEO_JOHNSON", 5, null, populationOf([5, 5, 5], "YEO_JOHNSON"))).toBe(1); // semua sama → 1
+    expect(normalize("YEO_JOHNSON", null, null, yj)).toBe(0); // tidak ada data → 0
+  });
+});
 
 const node = (id: string, level: ScoreNodeDef["level"], patch: Partial<ScoreNodeDef> = {}): ScoreNodeDef => ({
   id,

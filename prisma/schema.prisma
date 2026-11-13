@@ -194,6 +194,7 @@ enum NormalizationType {
   MIN_MAX
   THRESHOLD_TABLE
   OPTION_SCORE
+  YEO_JOHNSON // Q2: transformasi Yeo-Johnson lalu min-max (penjelasan Perpusnas tentang IPLM), tidak ada di ERD
 }
 
 enum AggregationType {
