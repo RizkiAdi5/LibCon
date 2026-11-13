@@ -133,6 +133,11 @@ test("periode ditutup & tidak diperpanjang → isian bisa dilihat tapi tidak bis
   await expect(page.getByLabel("Jumlah judul *", { exact: true })).toBeDisabled();
   await expect(page.getByRole("link", { name: "Lihat ringkasan & kirim" })).toHaveCount(0);
 
+  // BR-12: cron menandai draf yang lewat tenggat sebagai Tidak Mengisi
+  const cron = await page.request.get("/api/cron/period-status", { headers: { authorization: `Bearer ${process.env.CRON_SECRET}` } });
+  expect(cron.ok()).toBe(true);
+  expect((await fixture(page, { action: "submission-state", username })).status).toBe("NOT_SUBMITTED");
+
   // bersihkan: arsipkan periode uji supaya tidak menahan slot OPEN
   await fixture(page, { action: "close-e2e-periods" });
 });

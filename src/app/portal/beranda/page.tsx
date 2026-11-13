@@ -23,7 +23,9 @@ export default async function PortalBerandaPage() {
     );
   }
 
-  const status = SUBMISSION_STATUS[survey.submission?.status ?? "NOT_STARTED"];
+  const raw = survey.submission?.status ?? "NOT_STARTED";
+  // BR-12: Tidak Mengisi yang tenggatnya diperpanjang masih bisa diisi → tampil sebagai Draf
+  const status = SUBMISSION_STATUS[raw === "NOT_SUBMITTED" && survey.mode === "editable" ? "DRAFT" : raw];
   const progress = Number(survey.submission?.progressPct ?? 0);
   const msLeft = survey.effectiveClosesAt.getTime() - now.getTime();
   const msToOpen = survey.period.opensAt.getTime() - now.getTime();

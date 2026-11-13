@@ -76,6 +76,11 @@ describe("surveyMode [FR-07.02, BR-10, BR-12, AC M07]", () => {
     expect(surveyMode({ ...base, submissionStatus: null })).toBe("editable");
   });
 
+  it("BR-12: Tidak Mengisi lalu tenggat diperpanjang → bisa diisi lagi; tanpa perpanjangan → tutup", () => {
+    expect(surveyMode({ ...base, submissionStatus: "NOT_SUBMITTED" })).toBe("editable");
+    expect(surveyMode({ ...base, submissionStatus: "NOT_SUBMITTED", now: new Date("2026-07-01T00:00:00Z") })).toBe("closed");
+  });
+
   it("sebelum buka → hitung mundur", () => {
     expect(surveyMode({ ...base, periodStatus: "DRAFT" })).toBe("countdown");
     expect(surveyMode({ ...base, now: new Date("2026-05-31T00:00:00Z") })).toBe("countdown");

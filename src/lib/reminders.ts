@@ -84,7 +84,8 @@ export async function runReminders(actorId: string, now = new Date()) {
       });
       for (const inst of institutions) {
         const deadline = effectiveClosesAt(s.period.closesAt, s.period.periodExtensions, inst.id);
-        const status = inst.submissions[0]?.status ?? "NOT_STARTED";
+        const raw = inst.submissions[0]?.status ?? "NOT_STARTED";
+        const status = raw === "NOT_SUBMITTED" ? "DRAFT" : raw; // BR-12 lalu diperpanjang = masih draf
         if (!reminderDueToday("DEADLINE", s.offsetDays, deadline, now) || !targets.has(status)) continue;
         sent.deadline += await sendDeadlineReminder(inst, deadline, actorId, now);
       }

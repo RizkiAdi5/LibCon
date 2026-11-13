@@ -1,6 +1,6 @@
 import { prisma } from "./db/client";
 import { withDb } from "./db/withDb";
-import { nextAutoStatus } from "./period";
+import { effectiveClosesAt, nextAutoStatus } from "./period";
 
 /**
  * FR-02.04: jalankan transisi status otomatis untuk semua periode. Dipanggil
@@ -35,5 +35,20 @@ export async function runPeriodTransitions(now = new Date()) {
   }
 
   if (skipped.length) console.warn(`[cron:period-status] tidak dibuka karena ada periode OPEN lain: ${skipped.join(", ")}`);
-  return { opened, closed, skipped };
+  return { opened, closed, skipped, notSubmitted: await markNotSubmitted(now) };
+}
+
+/**
+ * BR-12: draf yang belum dikirim saat tenggat BERLAKU lembaga itu lewat (termasuk perpanjangan khusus
+ * lembaga) → NOT_SUBMITTED. Lembaga tanpa baris kiriman tetap tanpa baris (monitoring menampilkannya
+ * Tidak Mengisi). Bila kemudian diperpanjang, surveyMode tetap mengizinkan isi & autosave mengembalikan ke DRAFT.
+ */
+export async function markNotSubmitted(now = new Date()): Promise<number> {
+  const drafts = await prisma.submission.findMany({
+    where: { status: "DRAFT", period: { deletedAt: null, status: { in: ["OPEN", "CLOSED"] } } },
+    select: { id: true, institutionId: true, period: { select: { closesAt: true, periodExtensions: { where: { deletedAt: null } } } } },
+  });
+  const ids = drafts.filter((d) => effectiveClosesAt(d.period.closesAt, d.period.periodExtensions, d.institutionId) <= now).map((d) => d.id);
+  if (ids.length) await withDb((tx) => tx.submission.updateMany({ where: { id: { in: ids }, status: "DRAFT" }, data: { status: "NOT_SUBMITTED" } }));
+  return ids.length;
 }

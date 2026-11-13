@@ -103,7 +103,8 @@ export function surveyMode(p: {
 }): SurveyMode {
   if (p.periodStatus === "DRAFT" || p.now < p.opensAt) return "countdown";
   if (p.submissionStatus === "NEEDS_REVISION" && p.revisionDeadline && p.now < p.revisionDeadline && p.periodStatus !== "ARCHIVED") return "revision";
-  if (p.submissionStatus && !["NOT_STARTED", "DRAFT"].includes(p.submissionStatus)) return "submitted";
+  // NOT_SUBMITTED (BR-12) tetap bisa diisi bila tenggat lembaga ini diperpanjang / periode dibuka lagi
+  if (p.submissionStatus && !["NOT_STARTED", "DRAFT", "NOT_SUBMITTED"].includes(p.submissionStatus)) return "submitted";
   if (p.periodStatus === "ARCHIVED" || p.now >= p.effectiveClosesAt) return "closed";
   return "editable";
 }

@@ -36,6 +36,11 @@ describe("monitoringStatus [FR-10.01, BR-12]", () => {
     expect(monitoringStatus({ primaryAccountStatus: "ACTIVE", submissionStatus: "DRAFT", effectiveClosesAt: past, now })).toBe("NOT_SUBMITTED");
     expect(monitoringStatus({ primaryAccountStatus: "ACTIVE", submissionStatus: "SUBMITTED", effectiveClosesAt: past, now })).toBe("SUBMITTED");
   });
+  it("sudah ditandai Tidak Mengisi oleh cron: tetap Tidak Mengisi; diperpanjang → kembali Draf", () => {
+    const past = new Date("2026-06-01T00:00:00Z");
+    expect(monitoringStatus({ primaryAccountStatus: "ACTIVE", submissionStatus: "NOT_SUBMITTED", effectiveClosesAt: past, now })).toBe("NOT_SUBMITTED");
+    expect(monitoringStatus({ primaryAccountStatus: "ACTIVE", submissionStatus: "NOT_SUBMITTED", effectiveClosesAt: future, now })).toBe("DRAFT");
+  });
 });
 
 describe("stackCounts / csvCell", () => {

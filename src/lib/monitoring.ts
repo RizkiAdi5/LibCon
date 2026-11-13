@@ -36,8 +36,9 @@ export function monitoringStatus(p: {
   const s = p.submissionStatus ?? "NOT_STARTED";
   if (s === "NOT_STARTED" && p.primaryAccountStatus !== "ACTIVE") return "PENDING_ACTIVATION";
   // BR-12: draf yang tidak dikirim sampai tenggat lewat = Tidak Mengisi
-  if ((s === "NOT_STARTED" || s === "DRAFT") && p.effectiveClosesAt && p.now >= p.effectiveClosesAt) return "NOT_SUBMITTED";
-  return s;
+  if ((s === "NOT_STARTED" || s === "DRAFT" || s === "NOT_SUBMITTED") && p.effectiveClosesAt && p.now >= p.effectiveClosesAt) return "NOT_SUBMITTED";
+  // ditandai Tidak Mengisi oleh cron lalu tenggatnya diperpanjang → kembali dihitung Draf
+  return s === "NOT_SUBMITTED" ? "DRAFT" : s;
 }
 
 export const MONITORING_STATUS: Record<MonitoringStatus, { label: string; className: string; bar: string }> = {
