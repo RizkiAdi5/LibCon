@@ -66,7 +66,7 @@ test("admin: undang → aktivasi → login → Admin tidak bisa buka Log/Pengatu
   await sa.goto(`/admin/pengaturan/admin?q=${encodeURIComponent(email)}`);
   await sa.waitForLoadState("networkidle"); // <details> konfirmasi dibuka sebelum hidrasi → submit hilang
   const row = sa.getByTestId("admin-table").locator("tr", { hasText: email });
-  await row.getByText("Nonaktifkan", { exact: true }).click();
+  await row.getByTitle("Nonaktifkan", { exact: true }).click();
   await row.getByRole("button", { name: `Ya, nonaktifkan ${email}` }).click();
   await expect(flash(sa, "status")).toContainText(`${email} dinonaktifkan`, { timeout: 30_000 });
   await admin.goto("/admin/dashboard");
@@ -117,7 +117,7 @@ test("riwayat jenis peserta: hapus → Pulihkan dari tab Riwayat [FR-13.06, FR-1
   await expect(flash(page, "status")).toContainText(`Jenis ${name} ditambahkan`);
   await page.waitForLoadState("networkidle");
   const item = page.locator("li:visible", { hasText: code }).first();
-  await item.getByText("Hapus", { exact: true }).click();
+  await item.getByTitle("Hapus", { exact: true }).click();
   await item.getByRole("button", { name: `Ya, hapus ${name}` }).click();
   await expect(flash(page, "status")).toContainText("Jenis peserta dihapus");
   await expect(page.getByLabel(`Nama ${name}`)).toHaveCount(0);

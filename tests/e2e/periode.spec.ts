@@ -94,7 +94,7 @@ test("siklus periode: buat → buka → satu OPEN → perpanjang → salin → c
   // bersihkan: tutup B supaya tidak menghalangi run berikutnya
   await page.goto("/admin/periode");
   await page.getByRole("link", { name: b }).click();
-  await page.getByText("Tutup periode", { exact: true }).click();
+  await page.getByTitle("Tutup periode", { exact: true }).click();
   await page.getByRole("button", { name: "Ya, tutup periode" }).click();
   await expect(page.getByRole("status")).toContainText("Ditutup");
 });

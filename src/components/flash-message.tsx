@@ -2,14 +2,14 @@
 export function FlashMessage({ ok, error }: { ok?: string; error?: string }) {
   if (error) {
     return (
-      <p role="alert" className="rounded-md border border-destructive/50 p-3 text-sm text-destructive">
+      <p role="alert" className="rounded-md bg-destructive px-4 py-3 text-sm text-white shadow-xs">
         {error}
       </p>
     );
   }
   if (ok) {
     return (
-      <p role="status" className="rounded-md border border-green-600/50 p-3 text-sm text-green-700">
+      <p role="status" className="rounded-md bg-brand px-4 py-3 text-sm text-white shadow-xs">
         {ok}
       </p>
     );

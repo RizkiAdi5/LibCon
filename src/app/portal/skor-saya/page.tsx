@@ -6,6 +6,7 @@ import { loadReportRows, raporPeers } from "@/lib/reportData";
 import { groupMean } from "@/lib/report";
 import { RadarChart } from "@/components/radar-chart";
 import { buttonVariants } from "@/components/ui/button";
+import { IconOnly } from "@/components/action-icon";
 
 const fmt2 = new Intl.NumberFormat("id-ID", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const fmt3 = new Intl.NumberFormat("id-ID", { minimumFractionDigits: 3, maximumFractionDigits: 3 });
@@ -68,7 +69,7 @@ export default async function SkorSayaPage({ searchParams }: { searchParams: Pro
               </div>
             )}
             <a href={`/portal/skor-saya/rapor?periode=${current.periodId}`} className={buttonVariants({ variant: "outline", size: "sm" })}>
-              Unduh rapor PDF
+              <IconOnly label="Unduh rapor PDF" text="Unduh rapor PDF" />
             </a>
           </section>
 

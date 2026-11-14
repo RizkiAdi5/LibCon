@@ -12,6 +12,7 @@ import { FlashMessage } from "@/components/flash-message";
 import { ConfirmAction } from "@/components/confirm-action";
 import { addExtensionAction, addScheduleAction, copyPeriodAction, setPeriodStatusAction, toggleScheduleAction } from "../actions";
 import { PeriodForm } from "../period-form";
+import { IconOnly } from "@/components/action-icon";
 
 const STATUS_ACTION_LABEL = { DRAFT: "", OPEN: "Buka periode", CLOSED: "Tutup periode", ARCHIVED: "Arsipkan" } as const;
 const STATUS_IMPACT = {
@@ -180,8 +181,8 @@ export default async function DetailPeriodePage({
                 <form action={toggleScheduleAction}>
                   <input type="hidden" name="periodId" value={period.id} />
                   <input type="hidden" name="scheduleId" value={s.id} />
-                  <button type="submit" className="text-xs underline">
-                    {s.isActive ? "nonaktifkan" : "aktifkan"}
+                  <button type="submit" className="inline-flex items-center gap-1 text-xs hover:underline">
+                    <IconOnly label={s.isActive ? "nonaktifkan" : "aktifkan"} text={s.isActive ? "nonaktifkan" : "aktifkan"} className="size-3.5" />
                   </button>
                 </form>
               )}

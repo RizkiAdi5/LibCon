@@ -10,14 +10,15 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { adminAccountAction, inviteAdminAction } from "./actions";
+import { IconOnly } from "@/components/action-icon";
 
 function Act({ userId, action, label }: { userId: string; action: string; label: string }) {
   return (
     <form action={adminAccountAction}>
       <input type="hidden" name="userId" value={userId} />
       <input type="hidden" name="action" value={action} />
-      <button type="submit" className="text-xs underline">
-        {label}
+      <button type="submit" className="inline-flex items-center gap-1 text-xs hover:underline">
+        <IconOnly label={label} text={label} className="size-3.5" />
       </button>
     </form>
   );

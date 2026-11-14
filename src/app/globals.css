@@ -7,7 +7,12 @@
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-sans);
+  --color-brand: var(--brand);
+  --color-brand-dark: var(--brand-dark);
+  --color-success: var(--success);
+  --color-success-foreground: var(--success-foreground);
+  --color-warning: var(--warning);
+  --font-sans: var(--font-roboto), ui-sans-serif, system-ui, sans-serif;
   --font-mono: var(--font-geist-mono);
   --font-heading: var(--font-sans);
   --color-sidebar-ring: var(--sidebar-ring);
@@ -48,39 +53,45 @@
   --radius-4xl: calc(var(--radius) * 2.6);
 }
 
+/* Gaya "Rubick": latar biru royal, panel konten abu sangat muda, kartu putih bersudut kecil. */
 :root {
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.145 0 0);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.145 0 0);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.145 0 0);
-  --primary: oklch(0.205 0 0);
-  --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.97 0 0);
-  --secondary-foreground: oklch(0.205 0 0);
-  --muted: oklch(0.97 0 0);
-  --muted-foreground: oklch(0.556 0 0);
-  --accent: oklch(0.97 0 0);
-  --accent-foreground: oklch(0.205 0 0);
-  --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.922 0 0);
-  --input: oklch(0.922 0 0);
-  --ring: oklch(0.708 0 0);
-  --chart-1: oklch(0.87 0 0);
-  --chart-2: oklch(0.556 0 0);
-  --chart-3: oklch(0.439 0 0);
-  --chart-4: oklch(0.371 0 0);
-  --chart-5: oklch(0.269 0 0);
-  --radius: 0.625rem;
-  --sidebar: oklch(0.985 0 0);
-  --sidebar-foreground: oklch(0.145 0 0);
-  --sidebar-primary: oklch(0.205 0 0);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.97 0 0);
-  --sidebar-accent-foreground: oklch(0.205 0 0);
-  --sidebar-border: oklch(0.922 0 0);
-  --sidebar-ring: oklch(0.708 0 0);
+  --brand: #1c3faa; /* latar kerangka & sidebar */
+  --brand-dark: #1a389f;
+  --background: #f1f5f8; /* panel konten */
+  --foreground: #1e293b;
+  --card: #ffffff;
+  --card-foreground: #1e293b;
+  --popover: #ffffff;
+  --popover-foreground: #1e293b;
+  --primary: #1c3faa;
+  --primary-foreground: #ffffff;
+  --secondary: #e2e8f0;
+  --secondary-foreground: #1e293b;
+  --muted: #f1f5f9;
+  --muted-foreground: #64748b;
+  --accent: #e8eeff;
+  --accent-foreground: #1c3faa;
+  --success: #84cc16;
+  --success-foreground: #3f6212;
+  --warning: #f59e0b;
+  --destructive: #d32929;
+  --border: #e2e8f0;
+  --input: #e2e8f0;
+  --ring: #1c3faa;
+  --chart-1: #1c3faa;
+  --chart-2: #84cc16;
+  --chart-3: #f59e0b;
+  --chart-4: #d32929;
+  --chart-5: #64748b;
+  --radius: 0.375rem;
+  --sidebar: #1c3faa;
+  --sidebar-foreground: #ffffff;
+  --sidebar-primary: #ffffff;
+  --sidebar-primary-foreground: #1c3faa;
+  --sidebar-accent: #1a389f;
+  --sidebar-accent-foreground: #ffffff;
+  --sidebar-border: rgb(255 255 255 / 0.12);
+  --sidebar-ring: #ffffff;
 }
 
 .dark {
@@ -122,9 +133,77 @@
     @apply border-border outline-ring/50;
   }
   body {
-    @apply bg-background text-foreground;
+    @apply bg-background text-foreground text-sm;
   }
   html {
     @apply font-sans;
   }
+  h1 {
+    @apply text-lg font-medium text-foreground;
+  }
+  h2 {
+    @apply text-base font-medium text-foreground;
+  }
+  a {
+    @apply text-inherit;
+  }
+  /* kontrol bawaan (select/textarea native) tampil sebagai kotak putih seperti Input */
+  select,
+  textarea {
+    @apply bg-card shadow-xs;
+  }
+}
+
+/*
+ * Tabel di panel konten: header kapital kecil abu, setiap baris = kartu putih terpisah (gaya Rubick).
+ * Tabel bersarang (mis. detail sebelum-sesudah di dalam sel) tetap polos.
+ */
+@layer components {
+  .app-panel table:not(table table) {
+    border-collapse: separate;
+    border-spacing: 0 0.5rem;
+  }
+  .app-panel table:not(table table) > thead th {
+    @apply px-3 pb-0 text-left text-xs font-medium tracking-wide text-muted-foreground uppercase;
+  }
+  .app-panel table:not(table table) > tbody > tr {
+    @apply bg-card shadow-xs;
+  }
+  .app-panel table:not(table table) > tbody > tr > td {
+    @apply border-0 px-3 py-3 align-middle;
+  }
+  .app-panel table:not(table table) > tbody > tr > td:first-child {
+    @apply rounded-l-md;
+  }
+  .app-panel table:not(table table) > tbody > tr > td:last-child {
+    @apply rounded-r-md;
+  }
+  /* kartu standar: kotak putih, sudut kecil, bayangan halus */
+  .box {
+    @apply rounded-md bg-card p-5 shadow-xs;
+  }
+  /* wadah lama berpola "rounded-md border" di halaman → kartu putih tanpa garis (kontrol form tidak terpengaruh) */
+  .app-panel :is(section, div, form, li, fieldset, figure, details, ul).rounded-md.border {
+    @apply border-transparent bg-card shadow-xs;
+  }
+  /* tabel DI DALAM kartu putih: baris dipisah garis tipis, bukan kartu (putih di atas putih tidak terbaca) */
+  .app-panel :is(.box, .rounded-md.border) table:not(table table) {
+    border-spacing: 0;
+  }
+  .app-panel :is(.box, .rounded-md.border) table:not(table table) > tbody > tr {
+    @apply shadow-none;
+  }
+  .app-panel :is(.box, .rounded-md.border) table:not(table table) > tbody > tr > td {
+    @apply rounded-none border-t border-border;
+  }
+}
+
+/* tautan di sel tabel: tebal tanpa garis bawah, biru saat hover (gaya template).
+   Di luar @layer supaya mengalahkan utilitas `underline` yang dipasang di halaman. */
+.app-panel td a.underline {
+  font-weight: 500;
+  text-decoration-line: none;
+}
+.app-panel td a.underline:hover {
+  color: var(--brand);
 }

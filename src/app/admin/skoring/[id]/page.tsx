@@ -6,6 +6,7 @@ import { requireRole } from "@/lib/auth/guard";
 import { validateScheme, type ScoreNodeDef } from "@/lib/formula/scoring";
 import { AGGREGATION_LABEL, LEVEL_LABEL, loadScheme, loadVariables, NORMALIZATION_LABEL, SCHEME_STATUS } from "@/lib/scoringData";
 import { Button, buttonVariants } from "@/components/ui/button";
+import { IconOnly } from "@/components/action-icon";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { FlashMessage } from "@/components/flash-message";
@@ -125,7 +126,7 @@ export default async function SkemaPage({ params, searchParams }: { params: Prom
 
       <section className="flex flex-wrap items-start gap-4">
         <Link href={`/admin/skoring/${scheme.id}/hitung`} className={buttonVariants({ variant: "outline" })}>
-          Uji & hitung skor
+          <IconOnly label="Uji & hitung skor" text="Uji & hitung skor" />
         </Link>
         {editable && problems.length === 0 && (
           <ConfirmAction
@@ -192,8 +193,8 @@ export default async function SkemaPage({ params, searchParams }: { params: Prom
                                 <input type="hidden" name="schemeId" value={scheme.id} />
                                 <input type="hidden" name="parentId" value={n.id} />
                                 <input type="hidden" name="childId" value={e.childId} />
-                                <button type="submit" className="text-xs underline">
-                                  lepas
+                                <button type="submit" className="inline-flex items-center gap-1 text-xs hover:underline">
+                                  <IconOnly label={"lepas"} text="lepas" className="size-3.5" />
                                 </button>
                               </form>
                             )}
@@ -244,8 +245,8 @@ export default async function SkemaPage({ params, searchParams }: { params: Prom
                             <form action={deleteOverrideAction}>
                               <input type="hidden" name="schemeId" value={scheme.id} />
                               <input type="hidden" name="overrideId" value={o.id} />
-                              <button type="submit" className="text-xs underline">
-                                hapus
+                              <button type="submit" className="inline-flex items-center gap-1 text-xs hover:underline">
+                                <IconOnly label={"hapus"} text="hapus" className="size-3.5" />
                               </button>
                             </form>
                           )}
@@ -327,8 +328,8 @@ export default async function SkemaPage({ params, searchParams }: { params: Prom
                 <form action={deleteCategoryAction}>
                   <input type="hidden" name="schemeId" value={scheme.id} />
                   <input type="hidden" name="categoryId" value={c.id} />
-                  <button type="submit" className="text-xs underline">
-                    hapus
+                  <button type="submit" className="inline-flex items-center gap-1 text-xs hover:underline">
+                    <IconOnly label={"hapus"} text="hapus" className="size-3.5" />
                   </button>
                 </form>
               )}

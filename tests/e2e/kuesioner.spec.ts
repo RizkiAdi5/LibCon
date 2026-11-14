@@ -131,7 +131,7 @@ test("riwayat kuesioner: soal dihapus saat Draf → Pulihkan dari tab Riwayat [F
   await page.waitForLoadState("networkidle");
   // :visible — entri Riwayat (tersembunyi dalam <details>) juga memuat teks j_rak
   const row = page.locator("li:visible", { hasText: "j_rak" }).last();
-  await row.getByText("Hapus", { exact: true }).click();
+  await row.getByTitle("Hapus", { exact: true }).click();
   await row.getByRole("button", { name: "Ya, hapus j_rak" }).click();
   await expect(flash(page)).toContainText("Soal dihapus");
   await expect(page.locator("li:visible", { hasText: "j_rak" })).toHaveCount(0);
@@ -250,7 +250,7 @@ test("pratinjau per jenis, terbit + struktur terkunci, duplikat, salin periode [
 
   // FR-06.10: terbitkan
   await page.goto(builderUrl);
-  await page.getByText("Terbitkan kuesioner", { exact: true }).click();
+  await page.getByTitle("Terbitkan kuesioner", { exact: true }).click();
   await page.getByRole("button", { name: "Ya, terbitkan" }).click();
   await expect(flash(page)).toContainText("Kuesioner terbit dengan 4 soal");
 

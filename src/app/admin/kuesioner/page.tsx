@@ -5,6 +5,7 @@ import { PERIOD_STATUS } from "@/lib/period";
 import { Button } from "@/components/ui/button";
 import { FlashMessage } from "@/components/flash-message";
 import { createQuestionnaireAction } from "./actions";
+import { IconOnly } from "@/components/action-icon";
 
 export default async function KuesionerPage({ searchParams }: { searchParams: Promise<{ ok?: string; error?: string }> }) {
   await requireRole(["ADMIN", "SUPER_ADMIN"]);
@@ -47,8 +48,8 @@ export default async function KuesionerPage({ searchParams }: { searchParams: Pr
               </td>
               <td className="py-2">
                 {p.questionnaire ? (
-                  <Link href={`/admin/kuesioner/${p.id}`} className="underline">
-                    Buka builder
+                  <Link href={`/admin/kuesioner/${p.id}`} className="inline-flex items-center gap-1 hover:underline">
+                    <IconOnly label={"Ubah"} text="Buka builder" className="size-3.5" />
                   </Link>
                 ) : (
                   p.status !== "ARCHIVED" && (

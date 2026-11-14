@@ -6,6 +6,7 @@ import { MONITORING_STATUS, type MonitoringStatus } from "@/lib/monitoring";
 import { applyReportFilter, filterToQuery, parseReportFilter, type ReportRow } from "@/lib/report";
 import { loadReportRows } from "@/lib/reportData";
 import { Button, buttonVariants } from "@/components/ui/button";
+import { IconOnly } from "@/components/action-icon";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { FlashMessage } from "@/components/flash-message";
@@ -160,8 +161,8 @@ export default async function ReportPage({ searchParams }: { searchParams: Promi
                 {s.userId === user.id && (
                   <form action={deleteFilterAction}>
                     <input type="hidden" name="filterId" value={s.id} />
-                    <button type="submit" className="text-xs underline">
-                      hapus
+                    <button type="submit" className="inline-flex items-center gap-1 text-xs hover:underline">
+                      <IconOnly label={"hapus"} text="hapus" className="size-3.5" />
                     </button>
                   </form>
                 )}
@@ -190,13 +191,13 @@ export default async function ReportPage({ searchParams }: { searchParams: Promi
           {rows.length} baris ({scored.length} berskor)
         </span>
         <a href={`/admin/report/ekspor/excel?${query}`} className={buttonVariants({ size: "sm", variant: "outline" })}>
-          Ekspor Excel (format IPLM)
+          <IconOnly label="Ekspor Excel (format IPLM)" text="Ekspor Excel (format IPLM)" />
         </a>
         <a href={`/admin/report/ekspor/pdf?${query}`} className={buttonVariants({ size: "sm", variant: "outline" })}>
-          Laporan ringkas PDF
+          <IconOnly label="Laporan ringkas PDF" text="Laporan ringkas PDF" />
         </a>
         <a href={`/admin/report/ekspor/rapor?${query}`} className={buttonVariants({ size: "sm", variant: "outline" })}>
-          Rapor semua lembaga (ZIP)
+          <IconOnly label="Rapor semua lembaga (ZIP)" text="Rapor semua lembaga (ZIP)" />
         </a>
       </section>
 
@@ -241,8 +242,8 @@ export default async function ReportPage({ searchParams }: { searchParams: Promi
                     )}
                   </td>
                   <td>
-                    <a href={`/admin/report/ekspor/rapor?submission=${r.submissionId}`} className="underline">
-                      PDF
+                    <a href={`/admin/report/ekspor/rapor?submission=${r.submissionId}`} className="inline-flex items-center gap-1 hover:underline">
+                      <IconOnly label={"PDF"} text="PDF" className="size-3.5" />
                     </a>
                   </td>
                 </tr>

@@ -4,6 +4,7 @@ import { formatLogValue } from "@/lib/activityLog";
 import { loadRecordHistory } from "@/lib/activityLogData";
 import { RESTORE_ROLES } from "@/lib/restore";
 import { restoreAction } from "@/app/admin/riwayat-actions";
+import { IconOnly } from "@/components/action-icon";
 
 /**
  * FR-13.06 tab Riwayat (dipasang di detail lembaga, kiriman, soal, kuesioner, skema skor, jenis peserta).
@@ -20,7 +21,8 @@ export async function RecordHistory({ targets, returnTo, role, labels = {} }: { 
         <ul className="mt-2 space-y-2 text-sm">
           {entries.map((e) => (
             <li key={e.id} className="border-t pt-2">
-              <p>
+              {/* div, bukan p: tombol Pulihkan adalah <form>, tidak sah di dalam <p> (hydration error) */}
+              <div>
                 <span className="font-medium">{e.action}</span> {labels[e.tableName] ?? e.tableName}
                 {e.recordLabel && <> <code>{e.recordLabel}</code></>} · {formatWib(e.createdAt)} · {e.actor}
                 {e.restorable && RESTORE_ROLES[e.tableName]?.includes(role) && (
@@ -28,12 +30,12 @@ export async function RecordHistory({ targets, returnTo, role, labels = {} }: { 
                     <input type="hidden" name="table" value={e.tableName} />
                     <input type="hidden" name="recordId" value={e.recordId} />
                     <input type="hidden" name="returnTo" value={returnTo} />
-                    <button type="submit" className="text-xs underline">
-                      Pulihkan
+                    <button type="submit" className="inline-flex items-center gap-1 text-xs hover:underline">
+                      <IconOnly label={"Pulihkan"} text="Pulihkan" className="size-3.5" />
                     </button>
                   </form>
                 )}
-              </p>
+              </div>
               {e.changes.length > 0 && (
                 <table className="mt-1 text-xs">
                   <tbody>

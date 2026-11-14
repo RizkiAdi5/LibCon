@@ -5,6 +5,7 @@ import { requireRole } from "@/lib/auth/guard";
 import { getLockoutPolicy } from "@/lib/settings";
 import { groupInstitutions } from "@/lib/institutionGroups";
 import { Button, buttonVariants } from "@/components/ui/button";
+import { IconOnly } from "@/components/action-icon";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { FlashMessage } from "@/components/flash-message";
@@ -62,7 +63,7 @@ export default async function PesertaPage({ searchParams }: { searchParams: Prom
       <div className="flex items-center justify-between">
         <h1 className="text-xl font-semibold">Peserta</h1>
         <Link href="/admin/peserta/baru" className={buttonVariants()}>
-          Tambah lembaga
+          <IconOnly label="Tambah lembaga" text="Tambah lembaga" />
         </Link>
       </div>
       <FlashMessage ok={ok} error={error} />

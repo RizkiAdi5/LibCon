@@ -112,7 +112,7 @@ test.describe("Peserta & aktivasi [FR-03.01-03.10, BR-01]", () => {
     await login(page, admin, /\/admin\/dashboard/);
     await page.goto(`/admin/peserta?q=${username}`);
     await page.getByRole("link", { name: /Perpus E2E/ }).click();
-    await page.getByText("Nonaktifkan lembaga").click();
+    await page.getByTitle("Nonaktifkan lembaga", { exact: true }).click();
     await page.getByRole("button", { name: /Ya, nonaktifkan/ }).click();
     await expect(page.getByRole("status")).toContainText("tidak bisa login");
 
@@ -139,7 +139,7 @@ test.describe("Master data [FR-02.01, FR-02.02]", () => {
     await page.waitForLoadState("networkidle"); // <details> konfirmasi dibuka sebelum hidrasi → klik hilang
 
     const sd = page.locator("li").filter({ has: page.getByLabel("Nama Sekolah Dasar") });
-    await sd.getByText("Hapus", { exact: true }).click();
+    await sd.getByTitle("Hapus", { exact: true }).click();
     await sd.getByRole("button", { name: "Ya, hapus Sekolah Dasar" }).click();
     // p[role=alert]: Next.js punya route announcer ber-role alert sendiri
     await expect(page.locator(`p[role="alert"]`)).toContainText("tidak bisa dihapus. Gunakan tombol Nonaktifkan.");
@@ -152,7 +152,7 @@ test.describe("Master data [FR-02.01, FR-02.02]", () => {
     await page.waitForLoadState("networkidle");
 
     const row = page.locator("li").filter({ has: page.getByLabel(`Nama Jenis Uji ${code}`) });
-    await row.getByText("Hapus", { exact: true }).click();
+    await row.getByTitle("Hapus", { exact: true }).click();
     await row.getByRole("button", { name: `Ya, hapus Jenis Uji ${code}` }).click();
     await expect(page.getByRole("status")).toContainText("Jenis peserta dihapus");
   });

@@ -3,6 +3,7 @@ import { requireRole } from "@/lib/auth/guard";
 import { formatWib } from "@/lib/date";
 import { loadParticipantSurvey } from "@/lib/participantSurvey";
 import { buttonVariants } from "@/components/ui/button";
+import { IconOnly } from "@/components/action-icon";
 import { RevisionBanner } from "@/components/survey/revision-banner";
 import { SurveyFill } from "./survey-fill";
 
@@ -33,7 +34,7 @@ export default async function SurveiPage() {
       {survey.mode === "closed" && <p className="text-sm text-amber-700">Periode pengisian sudah ditutup. Isian bisa dilihat tapi tidak bisa diubah.</p>}
       {editable && (
         <Link href="/portal/survei/ringkasan" className={buttonVariants({ variant: "outline" })}>
-          Lihat ringkasan & kirim
+          <IconOnly label="Lihat ringkasan & kirim" text="Lihat ringkasan & kirim" />
         </Link>
       )}
       <SurveyFill
@@ -47,7 +48,7 @@ export default async function SurveiPage() {
       />
       {editable && (
         <Link href="/portal/survei/ringkasan" className={buttonVariants()}>
-          Lihat ringkasan & kirim
+          <IconOnly label="Lihat ringkasan & kirim" text="Lihat ringkasan & kirim" />
         </Link>
       )}
     </div>

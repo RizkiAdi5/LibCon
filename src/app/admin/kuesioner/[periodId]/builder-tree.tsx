@@ -18,6 +18,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ConfirmAction } from "@/components/confirm-action";
 import { deleteQuestionAction, deleteSectionAction, duplicateAction, reorderAction, saveSectionAction } from "../actions";
+import { IconOnly } from "@/components/action-icon";
 
 export type TreeQuestion = { id: string; code: string; label: string; typeLabel: string; isRequired: boolean; appliesTo: string };
 export type TreeSection = {
@@ -204,8 +205,8 @@ export function BuilderTree({
                   </span>
                 </div>
                 <div className="flex items-center gap-3">
-                  <Link href={`/admin/kuesioner/${periodId}/soal/${q.id}`} className="underline">
-                    {published ? "Lihat / ubah teks bantuan" : "Ubah"}
+                  <Link href={`/admin/kuesioner/${periodId}/soal/${q.id}`} className="inline-flex items-center gap-1 hover:underline">
+                    <IconOnly label={published ? "Lihat" : "Ubah"} text={published ? "Lihat / ubah teks bantuan" : "Ubah"} className="size-3.5" />
                   </Link>
                   {!published && <DuplicateButton periodId={periodId} kind="question" id={q.id} label={`Duplikat ${q.code}`} />}
                   {!published && (

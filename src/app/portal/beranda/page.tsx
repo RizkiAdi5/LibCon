@@ -4,6 +4,7 @@ import { formatWib } from "@/lib/date";
 import { loadParticipantSurvey } from "@/lib/participantSurvey";
 import { SUBMISSION_STATUS } from "@/lib/submissionStatus";
 import { buttonVariants } from "@/components/ui/button";
+import { IconOnly } from "@/components/action-icon";
 import { RevisionBanner } from "@/components/survey/revision-banner";
 
 const DAY = 24 * 60 * 60 * 1000;
@@ -27,6 +28,7 @@ export default async function PortalBerandaPage() {
   // BR-12: Tidak Mengisi yang tenggatnya diperpanjang masih bisa diisi → tampil sebagai Draf
   const status = SUBMISSION_STATUS[raw === "NOT_SUBMITTED" && survey.mode === "editable" ? "DRAFT" : raw];
   const progress = Number(survey.submission?.progressPct ?? 0);
+  const cta = survey.mode === "revision" ? "Perbaiki soal revisi" : survey.mode === "editable" ? (survey.submission ? "Lanjutkan mengisi" : "Mulai mengisi") : "Lihat isian";
   const msLeft = survey.effectiveClosesAt.getTime() - now.getTime();
   const msToOpen = survey.period.opensAt.getTime() - now.getTime();
 
@@ -57,7 +59,7 @@ export default async function PortalBerandaPage() {
               <p className="text-sm text-green-700">Terkirim {formatWib(survey.submission.lastSubmittedAt)}.</p>
             )}
             <Link href="/portal/survei" className={buttonVariants()}>
-              {survey.mode === "revision" ? "Perbaiki soal revisi" : survey.mode === "editable" ? (survey.submission ? "Lanjutkan mengisi" : "Mulai mengisi") : "Lihat isian"}
+              <IconOnly label={cta} text={cta} />
             </Link>
           </>
         )}

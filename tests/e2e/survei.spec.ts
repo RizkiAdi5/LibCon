@@ -219,7 +219,7 @@ test("admin: flag ikon merah → minta revisi 2 soal → peserta revisi & kirim 
   await flagRow.getByLabel(/Catatan terima flag/).first().fill("Ada hibah buku tahun ini");
   await flagRow.getByRole("button", { name: "Terima" }).first().click();
   await expect(admin.locator('p[role="status"]')).toContainText("Flag ditandai Diterima");
-  await admin.getByText("Verifikasi kiriman", { exact: true }).click();
+  await admin.getByTitle("Verifikasi kiriman", { exact: true }).click();
   await admin.getByRole("button", { name: "Ya, verifikasi" }).click();
   await expect(admin.locator('p[role="status"]')).toContainText("Terverifikasi");
 
@@ -308,7 +308,7 @@ test("skoring: preset 30/70 → validasi bobot → aktifkan → uji → hitung r
   await connect(admin, "dim_kinerja", "Kinerja", "Indikator: Jumlah judul", "100");
   for (const code of ["sub_koleksi", "sub_sdm", "sub_pelayanan", "sub_pengelolaan"]) {
     const card = admin.getByTestId(`node-${code}`);
-    await card.getByText("Hapus node", { exact: true }).click();
+    await card.getByTitle("Hapus node", { exact: true }).click();
     await card.getByRole("button", { name: `Ya, hapus ${code}` }).click();
     await expect(flash(admin)).toContainText("Node dihapus");
   }
@@ -319,7 +319,7 @@ test("skoring: preset 30/70 → validasi bobot → aktifkan → uji → hitung r
   await expect(admin.getByText("Aktifkan skema", { exact: true })).toHaveCount(0);
   await setWeight(admin, "Bobot Kinerja di Indeks Dasar", "70");
   await expect(problems).toContainText("Skema lolos validasi");
-  await admin.getByText("Aktifkan skema", { exact: true }).click();
+  await admin.getByTitle("Aktifkan skema", { exact: true }).click();
   await admin.getByRole("button", { name: "Ya, aktifkan" }).click();
   await expect(flash(admin)).toContainText("Skema aktif");
   const schemeV1 = admin.url().split("?")[0];
@@ -334,7 +334,7 @@ test("skoring: preset 30/70 → validasi bobot → aktifkan → uji → hitung r
 
   // FR-09.08: hitung resmi — B: rasio 5 → 0,5; judul terendah → 0 ⇒ 0,3 × 0,5 × 100 = 15
   await admin.waitForLoadState("networkidle"); // buka <details> sebelum hidrasi → submit server action bisa hilang
-  await admin.getByText("Hitung resmi", { exact: true }).click();
+  await admin.getByTitle("Hitung resmi", { exact: true }).click();
   await admin.getByRole("button", { name: "Ya, hitung resmi" }).click();
   await expect(flash(admin)).toContainText("Hitung resmi selesai: 2 kiriman");
   const scores = admin.getByTestId("official-scores");
@@ -350,7 +350,7 @@ test("skoring: preset 30/70 → validasi bobot → aktifkan → uji → hitung r
   await expect(page.getByTestId("my-index")).toHaveCount(0);
 
   // FR-09.11: publikasi
-  await admin.getByText("Publikasikan skor", { exact: true }).click();
+  await admin.getByTitle("Publikasikan skor", { exact: true }).click();
   await admin.getByRole("button", { name: "Ya, publikasikan" }).click();
   await expect(flash(admin)).toContainText("dipublikasikan ke 2 lembaga");
 
@@ -360,11 +360,11 @@ test("skoring: preset 30/70 → validasi bobot → aktifkan → uji → hitung r
   await expect(flash(admin)).toContainText("Skema versi 2 dibuat");
   await setWeight(admin, "Bobot Kepatuhan di Indeks Dasar", "50");
   await setWeight(admin, "Bobot Kinerja di Indeks Dasar", "50");
-  await admin.getByText("Aktifkan skema", { exact: true }).click();
+  await admin.getByTitle("Aktifkan skema", { exact: true }).click();
   await admin.getByRole("button", { name: "Ya, aktifkan" }).click();
   await admin.getByRole("link", { name: "Uji & hitung skor" }).click();
   await admin.waitForLoadState("networkidle");
-  await admin.getByText("Hitung resmi", { exact: true }).click();
+  await admin.getByTitle("Hitung resmi", { exact: true }).click();
   await admin.getByRole("button", { name: "Ya, hitung resmi" }).click();
   await expect(flash(admin)).toContainText("Hitung resmi selesai");
   await expect(scores.getByRole("row", { name: /Perpus E2E/ })).toContainText("25,00"); // 0,5 × 0,5 × 100
