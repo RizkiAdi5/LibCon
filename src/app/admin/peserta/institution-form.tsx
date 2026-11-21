@@ -46,13 +46,18 @@ export function InstitutionForm({
   types,
   initial,
   canEditNpp,
+  action = saveInstitutionAction,
+  participant = false,
 }: {
   districts: DistrictOption[];
   types: TypeOption[];
   initial?: Record<string, string>;
   canEditNpp: boolean;
+  action?: (prev: InstitutionFormState, formData: FormData) => Promise<InstitutionFormState>;
+  /** Peserta melengkapi profil sendiri: jenis & email login ditetapkan admin (server juga mengabaikannya). */
+  participant?: boolean;
 }) {
-  const [state, formAction, pending] = useActionState(saveInstitutionAction, initialState);
+  const [state, formAction, pending] = useActionState(action, initialState);
   const values = state.values ?? initial ?? {};
   const [districtId, setDistrictId] = useState(values.districtId ?? "");
   const villages = districts.find((d) => d.id === districtId)?.villages ?? [];
@@ -78,7 +83,7 @@ export function InstitutionForm({
         <Input id="institutionName" name="institutionName" maxLength={200} defaultValue={values.institutionName} required {...describe("institutionName")} />
       </Field>
       <Field name="typeId" label="Jenis peserta" required errors={errors}>
-        <select id="typeId" name="typeId" defaultValue={values.typeId ?? ""} className={selectClass} required {...describe("typeId")}>
+        <select id="typeId" name="typeId" defaultValue={values.typeId ?? ""} className={selectClass} required disabled={participant} {...describe("typeId")}>
           <option value="">— Pilih jenis —</option>
           {types.map((t) => (
             <option key={t.id} value={t.id}>
@@ -137,7 +142,7 @@ export function InstitutionForm({
         <Input id="picName" name="picName" defaultValue={values.picName} required {...describe("picName")} />
       </Field>
       <Field name="officialEmail" label="Email resmi" required errors={errors}>
-        <Input id="officialEmail" name="officialEmail" type="email" defaultValue={values.officialEmail} required {...describe("officialEmail")} />
+        <Input id="officialEmail" name="officialEmail" type="email" defaultValue={values.officialEmail} required readOnly={participant} {...describe("officialEmail")} />
       </Field>
       <Field name="whatsapp" label="Nomor WhatsApp (62xxxxxxxxxx)" errors={errors}>
         <Input id="whatsapp" name="whatsapp" inputMode="numeric" defaultValue={values.whatsapp} {...describe("whatsapp")} />
@@ -150,7 +155,7 @@ export function InstitutionForm({
       )}
       <div className="md:col-span-2">
         <Button type="submit" disabled={pending}>
-          {pending ? "Menyimpan..." : "Simpan lembaga"}
+          {pending ? "Menyimpan..." : participant ? "Simpan & lanjutkan" : "Simpan lembaga"}
         </Button>
       </div>
     </form>

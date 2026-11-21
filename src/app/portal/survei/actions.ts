@@ -244,7 +244,7 @@ export async function submitSurveyAction(_prev: SubmitState, formData: FormData)
     // FR-07.10: ringkasan jawaban (soal yang tampil) sebagai lampiran PDF; gagal render → email tetap terkirim tanpa lampiran
     const receipt = await renderReceiptPdf({
       libraryName: survey.institution.libraryName,
-      npp: survey.institution.npp,
+      npp: survey.institution.npp ?? "-",
       periodName: survey.period.name,
       submittedAt: now,
       submitterName: parsed.data.submitterName,

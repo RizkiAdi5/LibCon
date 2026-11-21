@@ -51,7 +51,7 @@ export default async function PesertaPage({ searchParams }: { searchParams: Prom
   const groups = groupInstitutions(
     institutions.map((i) => ({
       ...i,
-      districtName: i.region.parent?.name ?? "(tanpa kecamatan)",
+      districtName: i.region?.parent?.name ?? "(tanpa kecamatan)",
       typeName: i.type.name,
       typeSortOrder: i.type.sortOrder,
       primary: i.users[0],
@@ -63,7 +63,7 @@ export default async function PesertaPage({ searchParams }: { searchParams: Prom
       <div className="flex items-center justify-between">
         <h1 className="text-xl font-semibold">Peserta</h1>
         <Link href="/admin/peserta/baru" className={buttonVariants()}>
-          <IconOnly label="Tambah lembaga" text="Tambah lembaga" />
+          <IconOnly label="Buat akun peserta" text="Buat akun peserta" />
         </Link>
       </div>
       <FlashMessage ok={ok} error={error} />
@@ -130,7 +130,7 @@ export default async function PesertaPage({ searchParams }: { searchParams: Prom
                               {i.libraryName}
                             </Link>
                           </td>
-                          <td className="text-muted-foreground">{i.region.name}</td>
+                          <td className="text-muted-foreground">{i.region?.name ?? (i.profileCompletedAt ? "–" : "Profil belum dilengkapi")}</td>
                           <td className={status?.className}>{status?.label ?? "Tanpa akun"}</td>
                         </tr>
                       );

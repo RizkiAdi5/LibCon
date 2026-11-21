@@ -20,6 +20,7 @@ export default async function AdminLayout({ children }: { children: ReactNode })
       { href: "/admin/verifikasi", label: "Verifikasi", icon: "ClipboardCheck" },
       { href: "/admin/skoring", label: "Skoring", icon: "Calculator" },
       { href: "/admin/report", label: "Report", icon: "BarChart3" },
+      { href: "/admin/kunjungan", label: "Rekap Kunjungan", icon: "Users" },
     ],
     [
       { href: "/admin/peserta", label: "Peserta", icon: "Building2" },

@@ -96,7 +96,8 @@ export async function changePasswordAction(
   _prev: ChangePasswordState,
   formData: FormData,
 ): Promise<ChangePasswordState> {
-  const sessionUser = await requireRole(["PARTICIPANT"]);
+  // allowSetup: dipakai juga di /portal/mulai untuk mengganti password awal dari admin
+  const sessionUser = await requireRole(["PARTICIPANT"], { allowSetup: true });
   const parsed = changePasswordSchema.safeParse({
     oldPassword: formData.get("oldPassword"),
     password: formData.get("password"),
@@ -116,6 +117,7 @@ export async function changePasswordAction(
     institutionName: user.institution?.institutionName,
   });
   if (!check.valid) return { error: "Password baru tidak memenuhi syarat keamanan." };
+  if (oldPassword === password) return { error: "Password baru harus berbeda dari password lama." };
 
   const passwordHash = await hashPassword(password);
   const currentSession = (await cookies()).get(SESSION_COOKIE_NAME)!.value; // ada: requireRole lolos
@@ -124,7 +126,7 @@ export async function changePasswordAction(
     withDb(async (tx) => {
       await tx.user.update({
         where: { id: user.id },
-        data: { passwordHash, passwordChangedAt: new Date(), updatedBy: user.id },
+        data: { passwordHash, passwordChangedAt: new Date(), mustChangePassword: false, updatedBy: user.id },
       });
       await tx.activityLog.create({
         data: {
@@ -138,5 +140,6 @@ export async function changePasswordAction(
     }),
   );
 
+  if (user.mustChangePassword) redirect("/portal/mulai"); // lanjut ke langkah lengkapi profil
   return { success: true };
 }

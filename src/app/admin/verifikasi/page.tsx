@@ -121,7 +121,7 @@ export default async function VerifikasiPage({ searchParams }: { searchParams: P
                   {s.institution.libraryName}
                 </Link>
               </td>
-              <td>{s.institution.region.parent?.name}</td>
+              <td>{s.institution.region?.parent?.name}</td>
               <td>{s.institution.type.code}</td>
               <td className={SUBMISSION_STATUS[s.status].className}>{SUBMISSION_STATUS[s.status].label}</td>
               <td>

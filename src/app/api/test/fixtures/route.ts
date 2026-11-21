@@ -50,6 +50,7 @@ export async function POST(request: Request) {
                 address: "Jl. Uji Coba",
                 officialEmail: `e2e-${suffix}@example.com`,
                 picName: "Pengisi E2E",
+                profileCompletedAt: new Date(),
                 createdBy: SYSTEM_USER_ID,
               },
             });
@@ -57,7 +58,7 @@ export async function POST(request: Request) {
               data: {
                 role: "PARTICIPANT",
                 institutionId: institution.id,
-                username: institution.npp,
+                username: `E2E-${suffix}`,
                 email: institution.officialEmail,
                 fullName: "Pengisi E2E",
                 passwordHash,
@@ -190,6 +191,7 @@ export async function POST(request: Request) {
                 address: "Jl. Uji",
                 officialEmail: `survei-${stamp}@example.com`,
                 picName: "Pengisi",
+                profileCompletedAt: new Date(),
                 createdBy: SYSTEM_USER_ID,
               },
             });
@@ -197,7 +199,7 @@ export async function POST(request: Request) {
               data: {
                 role: "PARTICIPANT",
                 institutionId: institution.id,
-                username: institution.npp,
+                username: `S${stamp}`,
                 email: institution.officialEmail,
                 fullName: "Pengisi",
                 passwordHash,

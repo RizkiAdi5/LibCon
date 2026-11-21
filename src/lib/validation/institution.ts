@@ -38,5 +38,13 @@ export const institutionSchema = z.object({
   ),
 });
 
+/** Akun peserta baru oleh admin: hanya identitas minimum; sisanya dilengkapi peserta sendiri. */
+export const newParticipantSchema = z.object({
+  institutionName: institutionSchema.shape.institutionName,
+  typeId: institutionSchema.shape.typeId,
+  email: institutionSchema.shape.officialEmail,
+  password: z.string().min(1, "Password awal wajib diisi"),
+});
+
 export type InstitutionInput = z.infer<typeof institutionSchema>;
 export type InstitutionFieldErrors = Partial<Record<keyof InstitutionInput, string[]>>;

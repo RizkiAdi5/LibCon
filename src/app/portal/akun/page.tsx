@@ -79,7 +79,7 @@ export default async function PortalAkunPage({ searchParams }: { searchParams: P
 
       <section className="space-y-3">
         <h2 className="font-semibold">Ganti password</h2>
-        <ChangePasswordForm policy={policy} npp={institution.npp} institutionName={institution.institutionName} />
+        <ChangePasswordForm policy={policy} npp={institution.npp ?? undefined} institutionName={institution.institutionName} />
       </section>
     </div>
   );

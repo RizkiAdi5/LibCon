@@ -40,9 +40,9 @@ export async function loadMonitoring(periodId: string, now = new Date()) {
     const sub = i.submissions[0];
     return {
       id: i.id,
-      npp: i.npp,
+      npp: i.npp ?? "-",
       libraryName: i.libraryName,
-      districtName: i.region.parent?.name ?? "(tanpa kecamatan)",
+      districtName: i.region?.parent?.name ?? "(tanpa kecamatan)",
       typeName: i.type.name,
       typeCode: i.type.code,
       typeSortOrder: i.type.sortOrder,

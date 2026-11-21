@@ -24,76 +24,106 @@ function uniqueNpp() {
   return `${Date.now()}${Math.floor(Math.random() * 1000)}`;
 }
 
-async function fillInstitutionForm(page: Page, npp: string, email: string) {
+const NEW_PASSWORD = "PasswordBaru!2026";
+
+/** Admin membuat akun peserta (email + password awal). */
+async function createAccount(page: Page, name: string, email: string) {
+  await page.goto("/admin/peserta/baru");
+  await page.waitForLoadState("networkidle"); // input terkontrol: ketikan sebelum hidrasi bisa ter-reset
+  await page.getByLabel("Nama sekolah/lembaga").fill(name);
+  await page.getByLabel("Jenis peserta").selectOption({ label: "Sekolah Dasar" });
+  await page.getByLabel("Email (dipakai untuk login)").fill(email);
+  await page.getByLabel("Password awal").fill(TEST_PASSWORD);
+  await page.getByRole("button", { name: "Buat akun" }).click();
+  await expect(page.getByRole("status")).toContainText(`Akun ${email} dibuat`);
+}
+
+/** Login pertama peserta: wajib ganti password awal → halaman lengkapi profil. */
+async function firstLogin(page: Page, email: string) {
+  await login(page, email, /\/portal\/mulai/);
+  await page.waitForLoadState("networkidle");
+  await page.getByLabel("Password lama").fill(TEST_PASSWORD);
+  await page.getByLabel("Password baru", { exact: true }).fill(NEW_PASSWORD);
+  await page.getByLabel("Konfirmasi password baru").fill(NEW_PASSWORD);
+  await page.getByRole("button", { name: "Ganti password" }).click();
+  await expect(page.getByRole("heading", { name: "Lengkapi profil lembaga" })).toBeVisible();
+  await page.waitForLoadState("networkidle");
+}
+
+async function fillProfile(page: Page, npp: string) {
   await page.getByLabel("NPP (Nomor Pokok Perpustakaan)").fill(npp);
   await page.getByLabel("Nama perpustakaan").fill(`Perpustakaan Uji ${npp}`);
-  await page.getByLabel("Nama instansi/lembaga").fill(`SD Uji ${npp}`);
-  await page.getByLabel("Jenis peserta").selectOption({ label: "Sekolah Dasar" });
   await page.getByLabel("Kecamatan").selectOption({ label: "Pontianak Kota" });
   await page.getByLabel("Kelurahan").selectOption({ label: "Benua Melayu Laut" });
   await page.getByLabel("Alamat").fill("Jl. Uji No. 1");
   await page.getByLabel("Nama penanggung jawab/pengisi").fill("Pengisi Uji");
-  await page.getByLabel("Email resmi").fill(email);
+  await page.getByRole("button", { name: "Simpan & lanjutkan" }).click();
 }
 
-test.describe("Peserta & aktivasi [FR-03.01-03.10, BR-01]", () => {
-  test("admin tambah lembaga → email aktivasi → kirim ulang massal → aktivasi → login peserta", async ({
+test.describe("Akun peserta dibuat admin + lengkapi profil [FR-03.01, BR-01, BR-02]", () => {
+  test("admin buat akun email+password → peserta wajib ganti password & lengkapi profil → isi rekap kunjungan → admin memantau", async ({
     page,
     browser,
   }) => {
     const admin = await createAdmin(page, "ADMIN");
     await login(page, admin, /\/admin\/dashboard/);
-
     const npp = uniqueNpp();
     const email = `uji-${npp}@example.com`;
-    await page.goto("/admin/peserta/baru");
-    await fillInstitutionForm(page, npp, email);
-    await page.getByRole("button", { name: "Simpan lembaga" }).click();
-
-    // FR-03.02: akun utama otomatis, username = NPP, belum aktivasi
-    await expect(page.getByRole("status")).toContainText(`Email aktivasi dikirim ke ${email}`);
-    await expect(page.getByRole("row", { name: new RegExp(`${npp} \\(utama\\)`) })).toContainText("Belum aktivasi");
-
-    // FR-03.08 + FR-03.09: muncul di kelompok Kecamatan > Jenis, kirim ulang massal
-    await page.goto(`/admin/peserta?q=${npp}`);
-    await expect(page.getByRole("heading", { name: /Kec\. Pontianak Kota \(1\)/ })).toBeVisible();
-    await expect(page.getByRole("heading", { name: /Sekolah Dasar \(1\)/ })).toBeVisible();
-    await page.getByLabel(`Pilih Perpustakaan Uji ${npp}`).check();
-    await page.getByRole("button", { name: "Kirim ulang aktivasi ke yang dipilih" }).click();
-    await expect(page.getByRole("status")).toContainText("dikirim ulang ke 1 lembaga");
-
-    const res = await page.request.post("/api/test/fixtures", {
-      data: { action: "reissue-activation-token", username: npp },
-    });
-    const { token, activationEmailSent, sentTo } = await res.json();
-    expect(activationEmailSent).toBe(true);
-    expect(sentTo).toBe(email); // FR-03.04: ke email resmi lembaga
+    await createAccount(page, `SD Uji ${npp}`, email);
 
     const participant = await (await browser.newContext()).newPage();
-    await participant.goto(`/aktivasi/${token}`);
-    await participant.getByLabel("Password baru").fill(TEST_PASSWORD);
-    await participant.getByLabel("Konfirmasi password").fill(TEST_PASSWORD);
-    await participant.getByRole("button", { name: "Aktivasi & Masuk" }).click();
-    await expect(participant).toHaveURL(/\/login/);
-    await login(participant, npp, /\/portal\/beranda/);
+    await firstLogin(participant, email);
+    // fitur lain dikunci sampai profil lengkap
+    await participant.goto("/portal/survei");
+    await expect(participant).toHaveURL(/\/portal\/mulai/);
+    await fillProfile(participant, npp);
+    await expect(participant).toHaveURL(/\/portal\/beranda/);
+
+    // BR-02: setelah NPP diisi, username = NPP (login dengan email tetap bisa)
+    await page.goto(`/admin/peserta?q=${npp}`);
+    await expect(page.getByRole("heading", { name: /Kec\. Pontianak Kota \(1\)/ })).toBeVisible();
+
+    // rekap kunjungan bulanan: Januari tahun lalu selalu sudah dibuka
+    const year = new Date().getFullYear() - 1;
+    await participant.goto(`/portal/kunjungan?tahun=${year}`);
+    await participant.waitForLoadState("networkidle");
+    await participant.getByLabel("Laki-laki Januari").fill("1.200");
+    await participant.getByLabel("Perempuan Januari").fill("34");
+    await participant.getByLabel("Laki-laki Februari").fill("5");
+    await participant.getByRole("button", { name: "Simpan rekap" }).click();
+    await expect(participant.locator(`tr[data-month="2"]`)).toContainText("Isi jumlah laki-laki dan perempuan");
+    await participant.getByLabel("Perempuan Februari").fill("6");
+    await participant.getByRole("button", { name: "Simpan rekap" }).click();
+    await expect(participant.getByRole("status")).toContainText("Rekap 2 bulan tersimpan");
+
+    await page.goto(`/admin/kunjungan?tahun=${year}&q=${npp}`);
+    const row = page.locator("tr", { hasText: `SD Uji ${npp}` });
+    await expect(row).toContainText("1.234");
+    await expect(row).toContainText("1.245");
+    await expect(row).toContainText("Sebagian");
+    const download = page.waitForEvent("download");
+    await page.getByText("Unduh Excel").click();
+    expect((await download).suggestedFilename()).toBe(`libcon-kunjungan-${year}.xlsx`);
   });
 
-  test("NPP yang sudah terdaftar ditolak dengan nama lembaga pemiliknya [AC M03, BR-01]", async ({ page }) => {
+  test("NPP yang sudah terdaftar ditolak dengan nama lembaga pemiliknya [AC M03, BR-01]", async ({ page, browser }) => {
     const admin = await createAdmin(page, "ADMIN");
     await login(page, admin, /\/admin\/dashboard/);
-
     const npp = uniqueNpp();
-    await page.goto("/admin/peserta/baru");
-    await fillInstitutionForm(page, npp, `uji-${npp}@example.com`);
-    await page.getByRole("button", { name: "Simpan lembaga" }).click();
-    await expect(page.getByRole("status")).toContainText("ditambahkan");
+    await createAccount(page, `SD Uji ${npp}`, `uji-${npp}@example.com`);
+    await createAccount(page, `SD Lain ${npp}`, `lain-${npp}@example.com`);
 
-    await page.goto("/admin/peserta/baru");
-    await fillInstitutionForm(page, npp, `lain-${npp}@example.com`);
-    await page.getByRole("button", { name: "Simpan lembaga" }).click();
-    await expect(page.getByText(`NPP sudah dipakai oleh Perpustakaan Uji ${npp}`)).toBeVisible();
+    const first = await (await browser.newContext()).newPage();
+    await firstLogin(first, `uji-${npp}@example.com`);
+    await fillProfile(first, npp);
+    await expect(first).toHaveURL(/\/portal\/beranda/);
+
+    const second = await (await browser.newContext()).newPage();
+    await firstLogin(second, `lain-${npp}@example.com`);
+    await fillProfile(second, npp);
+    await expect(second.getByText(`NPP sudah dipakai oleh Perpustakaan Uji ${npp}`)).toBeVisible();
     // isian tetap ada setelah error
-    await expect(page.getByLabel("Email resmi")).toHaveValue(`lain-${npp}@example.com`);
+    await expect(second.getByLabel("Alamat")).toHaveValue("Jl. Uji No. 1");
   });
 
   test("lembaga nonaktif tidak bisa login, sesi dicabut, lalu bisa dipulihkan [FR-03.10]", async ({

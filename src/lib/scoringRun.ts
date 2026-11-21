@@ -60,7 +60,7 @@ export async function runOfficialScoring(schemeId: string, actorId: string) {
     const scored = results.map((r) => ({ ...r, row: rows.find((x) => x.submission.id === r.submissionId)! }));
     const overall = rankBy(scored, (s) => s.indexScore);
     const inType = rankBy(scored, (s) => s.indexScore, (s) => s.row.submission.institution.typeId);
-    const inDistrict = rankBy(scored, (s) => s.indexScore, (s) => s.row.submission.institution.region.parentId ?? "");
+    const inDistrict = rankBy(scored, (s) => s.indexScore, (s) => s.row.submission.institution.region?.parentId ?? "");
 
     await withDb(async (tx) => {
       // partial unique Tahap 3: satu skor is_current per kiriman — matikan yang lama dulu

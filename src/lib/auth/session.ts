@@ -61,6 +61,8 @@ export type SessionUser = {
   username: string;
   fullName: string;
   status: string;
+  /** Peserta yang akunnya dibuat admin: wajib ganti password awal, lalu lengkapi profil lembaga, sebelum fitur lain. */
+  setup: "password" | "profile" | null;
 };
 
 /** Baca cookie sesi dari request saat ini, validasi ke DB, kembalikan user aktif atau null. */
@@ -100,6 +102,14 @@ export async function getSessionUser(): Promise<SessionUser | null> {
     username: session.user.username,
     fullName: session.user.fullName,
     status: session.user.status,
+    setup:
+      session.user.role !== "PARTICIPANT"
+        ? null
+        : session.user.mustChangePassword
+          ? "password"
+          : session.user.institution && !session.user.institution.profileCompletedAt
+            ? "profile"
+            : null,
   };
 }
 

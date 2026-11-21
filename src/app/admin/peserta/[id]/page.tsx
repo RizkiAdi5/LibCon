@@ -38,7 +38,7 @@ export default async function DetailPesertaPage({
   if (!institution) notFound();
 
   const [{ types, districts }, lockoutPolicy] = await Promise.all([
-    loadInstitutionFormOptions(institution),
+    loadInstitutionFormOptions({ typeId: institution.typeId, regionId: institution.regionId ?? "" }),
     getLockoutPolicy(),
   ]);
   const now = new Date();
@@ -86,16 +86,16 @@ export default async function DetailPesertaPage({
           canEditNpp={user.role === "SUPER_ADMIN"}
           initial={{
             id: institution.id,
-            npp: institution.npp,
+            npp: institution.npp ?? "",
             npsn: institution.npsn ?? "",
             libraryName: institution.libraryName,
             institutionName: institution.institutionName,
             typeId: institution.typeId,
-            districtId: institution.region.parentId ?? "",
-            villageId: institution.regionId,
-            address: institution.address,
+            districtId: institution.region?.parentId ?? "",
+            villageId: institution.regionId ?? "",
+            address: institution.address ?? "",
             headName: institution.headName ?? "",
-            picName: institution.picName,
+            picName: institution.picName ?? "",
             officialEmail: institution.officialEmail,
             whatsapp: institution.whatsapp ?? "",
           }}

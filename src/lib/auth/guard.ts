@@ -22,8 +22,11 @@ export async function getCurrentUser(): Promise<SessionUser | null> {
  * admin/portal dan di setiap server action, bukan cuma di middleware.
  * Peserta yang membuka URL panel admin: redirect ke /403 + tercatat di
  * activity_logs (AC M04).
+ *
+ * Peserta yang belum ganti password awal / belum melengkapi profil diarahkan ke
+ * /portal/mulai untuk SEMUA halaman & action, kecuali yang memberi `allowSetup`.
  */
-export async function requireRole(allowed: UserRole[]): Promise<SessionUser> {
+export async function requireRole(allowed: UserRole[], opts: { allowSetup?: boolean } = {}): Promise<SessionUser> {
   const user = await getSessionUser();
   if (!user) redirect("/login");
 
@@ -43,6 +46,8 @@ export async function requireRole(allowed: UserRole[]): Promise<SessionUser> {
     );
     redirect("/403");
   }
+
+  if (user.setup && !opts.allowSetup) redirect("/portal/mulai");
 
   return user;
 }

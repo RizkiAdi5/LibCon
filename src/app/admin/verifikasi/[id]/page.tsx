@@ -69,7 +69,7 @@ export default async function DetailKirimanPage({
       <div>
         <h1 className="text-xl font-semibold">{submission.institution.libraryName}</h1>
         <p className="text-sm">
-          {submission.period.name} · NPP {submission.institution.npp} · {submission.institution.type.name} · Kec. {submission.institution.region.parent?.name}
+          {submission.period.name} · NPP {submission.institution.npp} · {submission.institution.type.name} · Kec. {submission.institution.region?.parent?.name}
         </p>
         <p className="text-sm">
           Status: <span className={status.className}>{status.label}</span> · Putaran {submission.revisionRound}

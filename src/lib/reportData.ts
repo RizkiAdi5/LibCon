@@ -73,25 +73,25 @@ export async function loadReportRows(periodIds: string[], now = new Date()): Pro
       const answers: Record<string, unknown> = {};
       for (const [id, value] of Object.entries(byId)) if (codeOf.has(id)) answers[codeOf.get(id)!] = value;
       const evidenceUrls = (definition?.sections ?? []).map((s) => byId[evidenceKey("section", s.id)]).filter((u): u is string => typeof u === "string" && !!u);
-      const district = i.region.parent;
+      const district = i.region?.parent;
       return {
         periodId: p.id,
         periodName: p.name,
         periodYear: p.year,
         passingScore: Number(p.passingScore),
         institutionId: i.id,
-        npp: i.npp,
+        npp: i.npp ?? "",
         npsn: i.npsn,
         libraryName: i.libraryName,
         institutionName: i.institutionName,
-        address: i.address,
+        address: i.address ?? "",
         whatsapp: i.whatsapp,
-        picName: i.picName,
+        picName: i.picName ?? "",
         submitterName: sub?.submitterName ?? null,
         cityName: district?.parent?.name ?? "",
         districtId: district?.id ?? "",
         districtName: district?.name ?? "(tanpa kecamatan)",
-        villageId: i.regionId,
+        villageId: i.regionId ?? "",
         typeId: i.typeId,
         typeCode: i.type.code,
         typeName: i.type.name,

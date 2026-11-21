@@ -308,29 +308,33 @@ model InstitutionType {
 }
 
 model Institution {
-  id              String    @id @default(uuid()) @db.Uuid
-  npp             String    @unique
-  npsn            String?
-  libraryName     String    @map("library_name")
-  institutionName String    @map("institution_name")
-  typeId          String    @map("type_id") @db.Uuid
-  regionId        String    @map("region_id") @db.Uuid
-  address         String
-  officialEmail   String    @map("official_email")
-  whatsapp        String?
-  headName        String?   @map("head_name")
-  picName         String    @map("pic_name")
-  isActive        Boolean   @default(true) @map("is_active")
-  createdAt       DateTime  @default(now()) @map("created_at")
-  createdBy       String    @map("created_by") @db.Uuid
-  updatedAt       DateTime  @updatedAt @map("updated_at")
-  updatedBy       String?   @map("updated_by") @db.Uuid
-  deletedAt       DateTime? @map("deleted_at")
-  deletedBy       String?   @map("deleted_by") @db.Uuid
+  id                 String    @id @default(uuid()) @db.Uuid
+  // npp/region/address/pic_name boleh kosong sampai peserta melengkapi profil sendiri
+  // (akun dibuat admin dengan email + password, feedback mentor 2026-11-19)
+  npp                String?   @unique
+  npsn               String?
+  libraryName        String    @map("library_name")
+  institutionName    String    @map("institution_name")
+  typeId             String    @map("type_id") @db.Uuid
+  regionId           String?   @map("region_id") @db.Uuid
+  address            String?
+  officialEmail      String    @map("official_email")
+  whatsapp           String?
+  headName           String?   @map("head_name")
+  picName            String?   @map("pic_name")
+  profileCompletedAt DateTime? @map("profile_completed_at")
+  isActive           Boolean   @default(true) @map("is_active")
+  createdAt          DateTime  @default(now()) @map("created_at")
+  createdBy          String    @map("created_by") @db.Uuid
+  updatedAt          DateTime  @updatedAt @map("updated_at")
+  updatedBy          String?   @map("updated_by") @db.Uuid
+  deletedAt          DateTime? @map("deleted_at")
+  deletedBy          String?   @map("deleted_by") @db.Uuid
 
   type             InstitutionType            @relation(fields: [typeId], references: [id])
-  region           Region                     @relation(fields: [regionId], references: [id])
+  region           Region?                    @relation(fields: [regionId], references: [id])
   users            User[]
+  visitorReports   VisitorReport[]
   changeRequests   InstitutionChangeRequest[]
   accountRequests  AccountRequest[]
   submissions      Submission[]
@@ -340,6 +344,28 @@ model Institution {
 
   @@index([regionId, typeId])
   @@map("institutions")
+}
+
+/// Rekap pengunjung perpustakaan per bulan (pengganti rekap Excel manual, feedback mentor 2026-11-19).
+/// Tidak ada di ERD. Satu baris per lembaga per bulan; koreksi = UPDATE (jejak di audit_logs).
+model VisitorReport {
+  id            String   @id @default(uuid()) @db.Uuid
+  institutionId String   @map("institution_id") @db.Uuid
+  year          Int      @db.SmallInt
+  month         Int      @db.SmallInt
+  male          Int
+  female        Int
+  createdAt     DateTime @default(now()) @map("created_at")
+  createdBy     String   @map("created_by") @db.Uuid
+  updatedAt     DateTime @updatedAt @map("updated_at")
+  updatedBy     String?  @map("updated_by") @db.Uuid
+
+  institution Institution @relation(fields: [institutionId], references: [id])
+
+  // TODO(migrasi-sql): CHECK month 1-12, male/female >= 0, FK *_by, trigger audit
+  @@unique([institutionId, year, month])
+  @@index([year, month])
+  @@map("visitor_reports")
 }
 
 model InstitutionChangeRequest {
@@ -369,26 +395,28 @@ model InstitutionChangeRequest {
 // =========================================================================
 
 model User {
-  id                String     @id @default(uuid()) @db.Uuid
-  role              UserRole
-  institutionId     String?    @map("institution_id") @db.Uuid
-  username          String     @unique
-  email             String     @unique
-  fullName          String     @map("full_name")
-  passwordHash      String?    @map("password_hash")
-  status            UserStatus @default(PENDING_ACTIVATION)
-  isPrimary         Boolean    @default(false) @map("is_primary")
-  failedLoginCount  Int        @default(0) @map("failed_login_count")
-  lockedUntil       DateTime?  @map("locked_until")
-  activatedAt       DateTime?  @map("activated_at")
-  lastLoginAt       DateTime?  @map("last_login_at")
-  passwordChangedAt DateTime?  @map("password_changed_at")
-  createdAt         DateTime   @default(now()) @map("created_at")
-  createdBy         String     @map("created_by") @db.Uuid
-  updatedAt         DateTime   @updatedAt @map("updated_at")
-  updatedBy         String?    @map("updated_by") @db.Uuid
-  deletedAt         DateTime?  @map("deleted_at")
-  deletedBy         String?    @map("deleted_by") @db.Uuid
+  id                 String     @id @default(uuid()) @db.Uuid
+  role               UserRole
+  institutionId      String?    @map("institution_id") @db.Uuid
+  username           String     @unique
+  email              String     @unique
+  fullName           String     @map("full_name")
+  passwordHash       String?    @map("password_hash")
+  status             UserStatus @default(PENDING_ACTIVATION)
+  isPrimary          Boolean    @default(false) @map("is_primary")
+  failedLoginCount   Int        @default(0) @map("failed_login_count")
+  lockedUntil        DateTime?  @map("locked_until")
+  activatedAt        DateTime?  @map("activated_at")
+  lastLoginAt        DateTime?  @map("last_login_at")
+  passwordChangedAt  DateTime?  @map("password_changed_at")
+  // password awal dibuat admin → peserta wajib menggantinya sebelum memakai fitur lain
+  mustChangePassword Boolean    @default(false) @map("must_change_password")
+  createdAt          DateTime   @default(now()) @map("created_at")
+  createdBy          String     @map("created_by") @db.Uuid
+  updatedAt          DateTime   @updatedAt @map("updated_at")
+  updatedBy          String?    @map("updated_by") @db.Uuid
+  deletedAt          DateTime?  @map("deleted_at")
+  deletedBy          String?    @map("deleted_by") @db.Uuid
 
   institution Institution? @relation(fields: [institutionId], references: [id])
 

@@ -189,7 +189,7 @@ export default async function HitungPage({
                     {s.rankInType} ({s.submission.institution.type.code})
                   </td>
                   <td>
-                    {s.rankInDistrict} ({s.submission.institution.region.parent?.name})
+                    {s.rankInDistrict} ({s.submission.institution.region?.parent?.name})
                   </td>
                   <td>v{s.scheme.version}</td>
                 </tr>
