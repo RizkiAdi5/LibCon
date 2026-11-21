@@ -1,4 +1,4 @@
-import { PrismaClient } from "@/generated/prisma/client";
+import { PrismaClient } from "@prisma/client";
 import { withCreatedBy, withUpdatedBy } from "./trackingFields";
 
 // Singleton aman untuk hot-reload Next.js dev (lihat Prisma docs "best practice").

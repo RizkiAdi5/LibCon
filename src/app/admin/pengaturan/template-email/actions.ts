@@ -7,7 +7,7 @@ import { withDb } from "@/lib/db/withDb";
 import { requireRole, runAsUser } from "@/lib/auth/guard";
 import { sendTemplateEmail } from "@/lib/email/send";
 import { SAMPLE_VARIABLES, TEMPLATE_INFO, unknownVariables } from "@/lib/email/templates";
-import type { EmailTemplateKey } from "@/generated/prisma/client";
+import type { EmailTemplateKey } from "@prisma/client";
 
 const keySchema = z.enum(Object.keys(TEMPLATE_INFO) as [EmailTemplateKey, ...EmailTemplateKey[]]);
 const back = (key: string, msg: Record<string, string>): never => redirect(`/admin/pengaturan/template-email/${key}?${new URLSearchParams(msg)}`);

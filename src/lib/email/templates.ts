@@ -1,4 +1,4 @@
-import type { EmailTemplateKey } from "@/generated/prisma/client";
+import type { EmailTemplateKey } from "@prisma/client";
 
 /**
  * FR-14.02: katalog template — label & variabel yang BENAR-BENAR diisi kode pengirimnya.

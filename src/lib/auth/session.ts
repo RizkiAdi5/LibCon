@@ -3,7 +3,7 @@ import { cookies } from "next/headers";
 import { prisma, type Db } from "../db/client";
 import { withDb } from "../db/withDb";
 import { runWithRequestContext } from "../db/requestContext";
-import type { UserRole } from "@/generated/prisma/client";
+import type { UserRole } from "@prisma/client";
 import { SESSION_COOKIE_NAME } from "./sessionCookie";
 import { getSessionPolicy } from "../settings";
 

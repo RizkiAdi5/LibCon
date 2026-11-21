@@ -1,4 +1,4 @@
-import type { UserRole } from "@/generated/prisma/client";
+import type { UserRole } from "@prisma/client";
 import { prisma, type Db } from "../db/client";
 import { withDb } from "../db/withDb";
 import { sendTemplateEmail } from "../email/send";

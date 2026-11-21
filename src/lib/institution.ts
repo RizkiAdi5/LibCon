@@ -1,4 +1,4 @@
-import { Prisma } from "@/generated/prisma/client";
+import { Prisma } from "@prisma/client";
 import { prisma } from "./db/client";
 import { withDb } from "./db/withDb";
 import type { InstitutionFieldErrors, InstitutionInput } from "./validation/institution";

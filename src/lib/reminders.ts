@@ -1,4 +1,4 @@
-import type { EmailTemplateKey, ReminderKind } from "@/generated/prisma/client";
+import type { EmailTemplateKey, ReminderKind } from "@prisma/client";
 import { prisma, type Db } from "./db/client";
 import { withDb } from "./db/withDb";
 import { formatWib } from "./date";

@@ -1,5 +1,5 @@
 import { z } from "zod";
-import type { ActivityType, AuditAction } from "@/generated/prisma/client";
+import type { ActivityType, AuditAction } from "@prisma/client";
 
 /** Menu Log Aktivitas (FR-13.07) — bagian murni: filter, label, diff sebelum-sesudah. */
 

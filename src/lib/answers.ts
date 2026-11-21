@@ -1,4 +1,4 @@
-import type { PeriodStatus, SubmissionStatus } from "@/generated/prisma/client";
+import type { PeriodStatus, SubmissionStatus } from "@prisma/client";
 
 /**
  * Nilai jawaban di klien/mesin validasi ↔ kolom `answers` (ERD):

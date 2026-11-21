@@ -1,4 +1,4 @@
-import type { UserRole } from "@/generated/prisma/client";
+import type { UserRole } from "@prisma/client";
 import { formatWib } from "@/lib/date";
 import { formatLogValue } from "@/lib/activityLog";
 import { loadRecordHistory } from "@/lib/activityLogData";

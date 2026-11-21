@@ -3,7 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { FlashMessage } from "@/components/flash-message";
-import type { Region } from "@/generated/prisma/client";
+import type { Region } from "@prisma/client";
 import { createRegionAction, toggleRegionActiveAction, updateRegionAction } from "./actions";
 
 const LEVEL_LABEL = { CITY: "Kota", DISTRICT: "Kecamatan", VILLAGE: "Kelurahan" } as const;

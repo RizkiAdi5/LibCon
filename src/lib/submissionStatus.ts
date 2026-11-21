@@ -1,4 +1,4 @@
-import type { SubmissionStatus } from "@/generated/prisma/client";
+import type { SubmissionStatus } from "@prisma/client";
 
 // Label status kiriman (flowchart §12) — selalu warna + teks (PRD §8)
 export const SUBMISSION_STATUS: Record<SubmissionStatus, { label: string; className: string }> = {

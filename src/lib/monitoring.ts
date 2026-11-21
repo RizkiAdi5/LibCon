@@ -1,4 +1,4 @@
-import type { SubmissionStatus, UserStatus } from "@/generated/prisma/client";
+import type { SubmissionStatus, UserStatus } from "@prisma/client";
 
 /** Tanggal kalender WIB "YYYY-MM-DD" — reminder dihitung per hari WIB (FR-10.05, FR-10.06). */
 export function wibDate(date: Date): string {

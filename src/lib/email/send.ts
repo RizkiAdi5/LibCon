@@ -1,6 +1,6 @@
 import { Resend } from "resend";
 import type { Db } from "../db/client";
-import type { EmailTemplateKey } from "@/generated/prisma/client";
+import type { EmailTemplateKey } from "@prisma/client";
 import { renderTemplate } from "./templates";
 
 const escapeHtml = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");

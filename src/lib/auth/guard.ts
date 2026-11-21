@@ -4,7 +4,7 @@ import { headers } from "next/headers";
 import { getSessionUser, type SessionUser } from "./session";
 import { runWithRequestContext } from "../db/requestContext";
 import { prisma } from "../db/client";
-import type { UserRole } from "@/generated/prisma/client";
+import type { UserRole } from "@prisma/client";
 
 export async function getClientMeta(): Promise<{ ip: string | null; userAgent: string | null }> {
   const h = await headers();

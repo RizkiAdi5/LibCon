@@ -8,7 +8,7 @@ import { FlashMessage } from "@/components/flash-message";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import type { EmailTemplateKey } from "@/generated/prisma/client";
+import type { EmailTemplateKey } from "@prisma/client";
 import { saveTemplateAction, sendTestAction } from "../actions";
 
 /** FR-14.02: ubah template, pratinjau dengan contoh variabel, kirim uji. */

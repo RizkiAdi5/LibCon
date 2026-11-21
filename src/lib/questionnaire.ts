@@ -1,4 +1,4 @@
-import type { QuestionType } from "@/generated/prisma/client";
+import type { QuestionType } from "@prisma/client";
 
 /** Tipe yang bisa dipilih admin. FILE (unggah file) = Tahap lanjutan (PRD §5.5), disembunyikan. */
 export const QUESTION_TYPE_LABEL: Record<Exclude<QuestionType, "FILE">, string> = {

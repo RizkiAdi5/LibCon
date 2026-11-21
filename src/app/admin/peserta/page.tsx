@@ -1,5 +1,5 @@
 import Link from "next/link";
-import type { Prisma, UserStatus } from "@/generated/prisma/client";
+import type { Prisma, UserStatus } from "@prisma/client";
 import { prisma } from "@/lib/db/client";
 import { requireRole } from "@/lib/auth/guard";
 import { getLockoutPolicy } from "@/lib/settings";

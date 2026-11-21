@@ -1,6 +1,6 @@
 import { randomBytes, createHash } from "node:crypto";
 import type { Db } from "../db/client";
-import type { TokenType } from "@/generated/prisma/client";
+import type { TokenType } from "@prisma/client";
 
 const TOKEN_TTL_MS = 24 * 60 * 60 * 1000; // 24 jam, BR-03
 

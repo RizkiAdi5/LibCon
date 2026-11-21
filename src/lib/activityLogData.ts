@@ -1,6 +1,6 @@
 import { prisma } from "./db/client";
 import { ACTIVITY_LABEL, AUDIT_ACTION_LABEL, auditChanges, wibDayRange, type LogFilter } from "./activityLog";
-import type { ActivityType, AuditAction } from "@/generated/prisma/client";
+import type { ActivityType, AuditAction } from "@prisma/client";
 
 export const LOG_PAGE_SIZE = 50;
 

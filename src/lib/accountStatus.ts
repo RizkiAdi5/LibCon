@@ -1,4 +1,4 @@
-import type { UserStatus } from "@/generated/prisma/client";
+import type { UserStatus } from "@prisma/client";
 
 // Prinsip UX PRD §8: status selalu warna + teks
 export const ACCOUNT_STATUS: Record<UserStatus, { label: string; className: string }> = {

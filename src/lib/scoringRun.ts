@@ -1,4 +1,4 @@
-import type { SubmissionStatus } from "@/generated/prisma/client";
+import type { SubmissionStatus } from "@prisma/client";
 import { prisma } from "./db/client";
 import { withDb } from "./db/withDb";
 import { computeScores, pickCategory, rankBy, type ScoringParticipant } from "./formula/scoring";

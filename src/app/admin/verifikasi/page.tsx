@@ -1,5 +1,5 @@
 import Link from "next/link";
-import type { Prisma, SubmissionStatus } from "@/generated/prisma/client";
+import type { Prisma, SubmissionStatus } from "@prisma/client";
 import { prisma } from "@/lib/db/client";
 import { requireRole } from "@/lib/auth/guard";
 import { formatWib } from "@/lib/date";
