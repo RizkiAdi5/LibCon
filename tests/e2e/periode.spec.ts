@@ -22,7 +22,7 @@ async function runCron(page: Page) {
 }
 
 async function createPeriod(page: Page, name: string, opensOffset: number, closesOffset: number) {
-  await page.goto("/admin/periode");
+  await page.goto("/admin/periode/baru");
   await page.getByLabel("Nama periode").fill(name);
   await page.getByLabel("Tahun").fill("2026");
   await page.getByLabel("Tanggal-jam buka (WIB)").fill(wib(opensOffset));

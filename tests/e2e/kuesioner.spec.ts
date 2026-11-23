@@ -22,7 +22,7 @@ async function loginSuperAdmin(page: Page) {
 /** Periode Draf baru + kuesionernya. Nama TIDAK berawalan "E2E " — fixture periode.spec mengarsipkan itu. */
 async function createQuestionnaire(page: Page) {
   const name = `Kuesioner Uji ${Date.now()}-${Math.random().toString(36).slice(2, 6)}`; // tes paralel bisa jalan di ms yang sama
-  await page.goto("/admin/periode");
+  await page.goto("/admin/periode/baru");
   await page.getByLabel("Nama periode").fill(name);
   await page.getByLabel("Tahun").fill("2026");
   await page.getByLabel("Tanggal-jam buka (WIB)").fill(wib(30 * 24 * HOUR));
