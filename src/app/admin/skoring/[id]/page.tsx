@@ -6,7 +6,7 @@ import { requireRole } from "@/lib/auth/guard";
 import { validateScheme, type ScoreNodeDef } from "@/lib/formula/scoring";
 import { AGGREGATION_LABEL, LEVEL_LABEL, loadScheme, loadVariables, NORMALIZATION_LABEL, SCHEME_STATUS } from "@/lib/scoringData";
 import { Button, buttonVariants } from "@/components/ui/button";
-import { IconOnly } from "@/components/action-icon";
+import { ActionIcon, IconOnly } from "@/components/action-icon";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { FlashMessage } from "@/components/flash-message";
@@ -126,7 +126,8 @@ export default async function SkemaPage({ params, searchParams }: { params: Prom
 
       <section className="flex flex-wrap items-start gap-4">
         <Link href={`/admin/skoring/${scheme.id}/hitung`} className={buttonVariants({ variant: "outline" })}>
-          <IconOnly label="Uji & hitung skor" text="Uji & hitung skor" />
+          <ActionIcon label="Uji & hitung skor" />
+          Uji & hitung skor
         </Link>
         {editable && problems.length === 0 && (
           <ConfirmAction

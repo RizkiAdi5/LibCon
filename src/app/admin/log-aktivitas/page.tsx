@@ -4,7 +4,7 @@ import { formatWib } from "@/lib/date";
 import { ACTIVITY_LABEL, AUDIT_ACTION_LABEL, formatLogValue, parseLogFilter, type LogFilter } from "@/lib/activityLog";
 import { auditedTables, loadLogs } from "@/lib/activityLogData";
 import { Button, buttonVariants } from "@/components/ui/button";
-import { IconOnly } from "@/components/action-icon";
+import { ActionIcon } from "@/components/action-icon";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
@@ -74,7 +74,8 @@ export default async function LogAktivitasPage({ searchParams }: { searchParams:
           Terapkan
         </Button>
         <a href={`/admin/log-aktivitas/ekspor?${query(f, { hal: 1 })}`} className={buttonVariants({ size: "sm", variant: "outline" })}>
-          <IconOnly label="Ekspor CSV" text="Ekspor CSV" />
+          <ActionIcon label="Ekspor CSV" />
+          Ekspor CSV
         </a>
       </form>
 

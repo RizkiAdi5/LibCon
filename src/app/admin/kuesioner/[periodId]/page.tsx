@@ -6,7 +6,7 @@ import { requireRole } from "@/lib/auth/guard";
 import { RecordHistory } from "@/components/record-history";
 import { QUESTION_TYPE_LABEL, type BuilderQuestionType } from "@/lib/questionnaire";
 import { Button, buttonVariants } from "@/components/ui/button";
-import { IconOnly } from "@/components/action-icon";
+import { ActionIcon } from "@/components/action-icon";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { FlashMessage } from "@/components/flash-message";
@@ -85,7 +85,8 @@ export default async function BuilderPage({
 
       <div className="flex flex-wrap items-start gap-4">
         <Link href={`/admin/kuesioner/${periodId}/pratinjau`} className={buttonVariants({ variant: "outline" })}>
-          <IconOnly label="Pratinjau sebagai peserta" text="Pratinjau sebagai peserta" />
+          <ActionIcon label="Pratinjau sebagai peserta" />
+          Pratinjau sebagai peserta
         </Link>
         {!archived && !published && (
           <ConfirmAction

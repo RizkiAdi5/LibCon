@@ -4,7 +4,7 @@ import { formatWib } from "@/lib/date";
 import { loadParticipantSurvey } from "@/lib/participantSurvey";
 import { SUBMISSION_STATUS } from "@/lib/submissionStatus";
 import { buttonVariants } from "@/components/ui/button";
-import { IconOnly } from "@/components/action-icon";
+import { ActionIcon } from "@/components/action-icon";
 import { RevisionBanner } from "@/components/survey/revision-banner";
 
 const DAY = 24 * 60 * 60 * 1000;
@@ -59,7 +59,8 @@ export default async function PortalBerandaPage() {
               <p className="text-sm text-green-700">Terkirim {formatWib(survey.submission.lastSubmittedAt)}.</p>
             )}
             <Link href="/portal/survei" className={buttonVariants()}>
-              <IconOnly label={cta} text={cta} />
+              <ActionIcon label={cta} />
+              {cta}
             </Link>
           </>
         )}

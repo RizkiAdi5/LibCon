@@ -1,5 +1,5 @@
-import { Button } from "@/components/ui/button";
-import { IconOnly } from "@/components/action-icon";
+import { Button, buttonVariants } from "@/components/ui/button";
+import { ActionIcon } from "@/components/action-icon";
 
 /**
  * Tindakan berbahaya dengan konfirmasi di halaman yang menyebut dampaknya
@@ -20,9 +20,9 @@ export function ConfirmAction({
 }) {
   return (
     <details className="relative">
-      {/* title di summary: tooltip + target klik tes (teks label sr-only) */}
-      <summary title={label} className="inline-flex cursor-pointer list-none items-center gap-1 text-sm text-destructive">
-        <IconOnly label={label} tooltip={false} />
+      <summary title={label} className={buttonVariants({ variant: "outline", className: "cursor-pointer list-none" })}>
+        <ActionIcon label={label} />
+        {label}
       </summary>
       <form action={action} className="mt-2 max-w-sm space-y-2 rounded-md border border-destructive/50 p-3">
         {Object.entries(fields).map(([name, value]) => (

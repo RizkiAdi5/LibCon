@@ -6,7 +6,7 @@ import { MONITORING_STATUS, type MonitoringStatus } from "@/lib/monitoring";
 import { applyReportFilter, filterToQuery, parseReportFilter, type ReportRow } from "@/lib/report";
 import { loadReportRows } from "@/lib/reportData";
 import { Button, buttonVariants } from "@/components/ui/button";
-import { IconOnly } from "@/components/action-icon";
+import { ActionIcon, IconOnly } from "@/components/action-icon";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { FlashMessage } from "@/components/flash-message";
@@ -23,7 +23,7 @@ function CheckGroup({ name, legend, options, selected }: { name: string; legend:
   return (
     <fieldset className="space-y-1">
       <legend className="text-sm font-medium">{legend}</legend>
-      <div className="flex max-h-32 flex-col gap-1 overflow-y-auto text-sm">
+      <div className="flex max-h-32 flex-col gap-1 overflow-y-auto rounded-md border p-2 text-sm">
         {options.map((o) => (
           <label key={o.value} className="flex items-center gap-2">
             <input type="checkbox" name={name} value={o.value} defaultChecked={selected.includes(o.value)} />
@@ -191,13 +191,16 @@ export default async function ReportPage({ searchParams }: { searchParams: Promi
           {rows.length} baris ({scored.length} berskor)
         </span>
         <a href={`/admin/report/ekspor/excel?${query}`} className={buttonVariants({ size: "sm", variant: "outline" })}>
-          <IconOnly label="Ekspor Excel (format IPLM)" text="Ekspor Excel (format IPLM)" />
+          <ActionIcon label="Ekspor Excel (format IPLM)" />
+          Ekspor Excel (format IPLM)
         </a>
         <a href={`/admin/report/ekspor/pdf?${query}`} className={buttonVariants({ size: "sm", variant: "outline" })}>
-          <IconOnly label="Laporan ringkas PDF" text="Laporan ringkas PDF" />
+          <ActionIcon label="Laporan ringkas PDF" />
+          Laporan ringkas PDF
         </a>
         <a href={`/admin/report/ekspor/rapor?${query}`} className={buttonVariants({ size: "sm", variant: "outline" })}>
-          <IconOnly label="Rapor semua lembaga (ZIP)" text="Rapor semua lembaga (ZIP)" />
+          <ActionIcon label="Rapor semua lembaga (ZIP)" />
+          Rapor semua lembaga (ZIP)
         </a>
       </section>
 

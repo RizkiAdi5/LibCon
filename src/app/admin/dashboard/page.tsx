@@ -7,21 +7,9 @@ import { groupInstitutions } from "@/lib/institutionGroups";
 import { MONITORING_STATUS, stackCounts, type MonitoringStatus } from "@/lib/monitoring";
 import { filterRows, loadMonitoring, type MonitoringRow } from "@/lib/monitoringData";
 import { Button, buttonVariants } from "@/components/ui/button";
-import { IconOnly } from "@/components/action-icon";
 import { Label } from "@/components/ui/label";
 import { FlashMessage } from "@/components/flash-message";
 import { bulkActivationAction, bulkReminderAction } from "./actions";
-import { BadgeCheck, Building2, CircleDashed, FilePen, Flag, MailWarning, RotateCcw, Send, XCircle, type LucideIcon } from "lucide-react";
-
-const STATUS_ICON: Record<MonitoringStatus, LucideIcon> = {
-  PENDING_ACTIVATION: MailWarning,
-  NOT_STARTED: CircleDashed,
-  DRAFT: FilePen,
-  SUBMITTED: Send,
-  NEEDS_REVISION: RotateCcw,
-  VERIFIED: BadgeCheck,
-  NOT_SUBMITTED: XCircle,
-};
 
 const PAGE_SIZE = 100;
 const STATUS_ORDER: MonitoringStatus[] = ["PENDING_ACTIVATION", "NOT_STARTED", "DRAFT", "SUBMITTED", "NEEDS_REVISION", "VERIFIED", "NOT_SUBMITTED"];
@@ -30,31 +18,34 @@ const pct = new Intl.NumberFormat("id-ID", { maximumFractionDigits: 0 });
 /** FR-10.02: batang bertumpuk per status (CSS, dengan teks untuk pembaca layar). */
 function StackedBars({ title, rows, groupOf }: { title: string; rows: MonitoringRow[]; groupOf: (r: MonitoringRow) => string }) {
   const stacks = stackCounts(rows, groupOf, (r) => r.status);
+  const present = STATUS_ORDER.filter((st) => stacks.some((s) => s.counts.get(st)));
   return (
-    <figure className="box space-y-3">
+    <figure className="box space-y-4">
       <figcaption className="font-medium">{title}</figcaption>
-      {stacks.map((s) => (
-        <div key={s.group} className="space-y-1 text-sm">
-          <div className="flex justify-between">
-            <span>{s.group}</span>
-            <span className="text-muted-foreground">{s.total} lembaga</span>
+      <div className="space-y-3">
+        {stacks.map((s) => (
+          <div key={s.group} className="space-y-1 text-sm">
+            <div className="flex justify-between">
+              <span>{s.group}</span>
+              <span className="text-muted-foreground">{s.total} lembaga</span>
+            </div>
+            <div className="flex h-3 w-full overflow-hidden rounded-full bg-muted" aria-hidden>
+              {STATUS_ORDER.filter((st) => s.counts.get(st)).map((st) => (
+                <div key={st} className={MONITORING_STATUS[st].bar} style={{ width: `${(s.counts.get(st)! / s.total) * 100}%` }} title={`${MONITORING_STATUS[st].label}: ${s.counts.get(st)}`} />
+              ))}
+            </div>
+            <p className="sr-only">
+              {STATUS_ORDER.filter((st) => s.counts.get(st))
+                .map((st) => `${MONITORING_STATUS[st].label} ${s.counts.get(st)}`)
+                .join(", ")}
+            </p>
           </div>
-          <div className="flex h-2.5 w-full overflow-hidden rounded-full bg-muted" aria-hidden>
-            {STATUS_ORDER.filter((st) => s.counts.get(st)).map((st) => (
-              <div key={st} className={MONITORING_STATUS[st].bar} style={{ width: `${(s.counts.get(st)! / s.total) * 100}%` }} title={`${MONITORING_STATUS[st].label}: ${s.counts.get(st)}`} />
-            ))}
-          </div>
-          <p className="sr-only">
-            {STATUS_ORDER.filter((st) => s.counts.get(st))
-              .map((st) => `${MONITORING_STATUS[st].label} ${s.counts.get(st)}`)
-              .join(", ")}
-          </p>
-        </div>
-      ))}
-      <ul className="flex flex-wrap gap-3 pt-1 text-xs">
-        {STATUS_ORDER.map((st) => (
-          <li key={st} className="flex items-center gap-1">
-            <span className={`inline-block h-3 w-3 rounded-sm ${MONITORING_STATUS[st].bar}`} aria-hidden />
+        ))}
+      </div>
+      <ul className="flex flex-wrap gap-x-4 gap-y-1.5 border-t pt-3 text-xs text-muted-foreground">
+        {present.map((st) => (
+          <li key={st} className="flex items-center gap-1.5">
+            <span className={`inline-block size-2.5 rounded-full ${MONITORING_STATUS[st].bar}`} aria-hidden />
             {MONITORING_STATUS[st].label}
           </li>
         ))}
@@ -91,16 +82,15 @@ export default async function AdminDashboardPage({
   const rows = filterRows(data.rows, { status, flag });
   const count = (s: MonitoringStatus) => data.rows.filter((r) => r.status === s).length;
   const query = (extra: Record<string, string>) => `?${new URLSearchParams({ periode: period.id, ...extra })}`;
-  const cards: { label: string; value: number; href: string; active: boolean; className: string; Icon: LucideIcon }[] = [
-    { label: "Total lembaga", value: data.rows.length, href: query({}), active: !status && !flag, className: "text-brand", Icon: Building2 },
-    ...(["PENDING_ACTIVATION", "NOT_STARTED", "DRAFT", "SUBMITTED"] as const).map((s) => ({
-      label: MONITORING_STATUS[s].label, value: count(s), href: query({ status: s }), active: status === s, className: MONITORING_STATUS[s].className, Icon: STATUS_ICON[s],
-    })),
-    { label: "Ada Flag", value: data.rows.filter((r) => r.openFlagCount > 0).length, href: query({ flag: "1" }), active: flag, className: "text-destructive", Icon: Flag },
-    ...(["NEEDS_REVISION", "VERIFIED", "NOT_SUBMITTED"] as const).map((s) => ({
-      label: MONITORING_STATUS[s].label, value: count(s), href: query({ status: s }), active: status === s, className: MONITORING_STATUS[s].className, Icon: STATUS_ICON[s],
-    })),
-  ];
+  const flagCount = data.rows.filter((r) => r.openFlagCount > 0).length;
+  const statusCards = STATUS_ORDER.map((s) => ({
+    label: MONITORING_STATUS[s].label,
+    value: count(s),
+    href: query({ status: s }),
+    active: status === s,
+    className: MONITORING_STATUS[s].className,
+    bar: MONITORING_STATUS[s].bar,
+  }));
   // daftar dipaginasi: merender ratusan baris sekaligus membuat dashboard (tujuan setelah login) lambat
   const pages = Math.max(1, Math.ceil(rows.length / PAGE_SIZE));
   const page = Math.min(Math.max(1, Number(sp.hal) || 1), pages);
@@ -135,21 +125,50 @@ export default async function AdminDashboardPage({
       </div>
       <FlashMessage ok={sp.ok} error={sp.error} />
 
-      {/* FR-10.01: klik kartu memfilter tabel */}
+      {/* FR-10.01: klik kartu memfilter tabel. Total & Ada Flag dipisah dari alur status karena
+          keduanya lintas-status (total = semua, flag = bisa muncul di status manapun). */}
       <section className="space-y-3">
-        <h2>Ringkasan status</h2>
-        <nav aria-label="Ringkasan status" className="grid grid-cols-2 gap-4 md:grid-cols-3 xl:grid-cols-5">
-          {cards.map((c) => (
+        <h2>Ringkasan</h2>
+        <div className="grid grid-cols-2 gap-4 sm:grid-cols-[1fr_1fr]">
+          <Link
+            href={query({})}
+            aria-current={!status && !flag ? "page" : undefined}
+            data-testid="card-Total lembaga"
+            className={`box flex items-center justify-between p-5 transition-shadow hover:shadow-md ${!status && !flag ? "ring-2 ring-brand" : ""}`}
+          >
+            <div>
+              <p className="text-sm text-muted-foreground">Total lembaga</p>
+              <p className="mt-1 text-3xl leading-none font-semibold text-brand">{data.rows.length}</p>
+            </div>
+          </Link>
+          <Link
+            href={query({ flag: "1" })}
+            aria-current={flag ? "page" : undefined}
+            data-testid="card-Ada Flag"
+            className={`box flex items-center justify-between p-5 transition-shadow hover:shadow-md ${flag ? "ring-2 ring-brand" : ""}`}
+          >
+            <div>
+              <p className="text-sm text-muted-foreground">Ada flag — perlu diperiksa</p>
+              <p className={`mt-1 text-3xl leading-none font-semibold ${flagCount > 0 ? "text-destructive" : ""}`}>{flagCount}</p>
+            </div>
+          </Link>
+        </div>
+
+        <p className="pt-1 text-sm font-medium text-muted-foreground">Status pengisian</p>
+        <nav aria-label="Status pengisian" className="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-7">
+          {statusCards.map((c) => (
             <Link
               key={c.label}
               href={c.href}
               aria-current={c.active ? "page" : undefined}
               data-testid={`card-${c.label}`}
-              className={`box p-4 transition-transform hover:-translate-y-0.5 hover:shadow-md ${c.active ? "ring-2 ring-brand" : ""}`}
+              className={`box p-3.5 transition-shadow hover:shadow-md ${c.active ? "ring-2 ring-brand" : ""}`}
             >
-              <c.Icon className={`size-6 ${c.className}`} aria-hidden />
-              <p className="mt-4 text-3xl leading-none font-medium">{c.value}</p>
-              <p className="mt-1.5 text-muted-foreground">{c.label}</p>
+              <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                <span className={`size-2 shrink-0 rounded-full ${c.bar}`} aria-hidden />
+                {c.label}
+              </span>
+              <p className="mt-1.5 text-2xl leading-none font-semibold">{c.value}</p>
             </Link>
           ))}
         </nav>
@@ -170,7 +189,8 @@ export default async function AdminDashboardPage({
         <div className="flex flex-wrap items-center gap-2">
           <span className="mr-auto text-muted-foreground">
             {rows.length} lembaga{status || flag ? " (terfilter)" : ""}
-            {pages > 1 && ` · menampilkan ${(page - 1) * PAGE_SIZE + 1}–${Math.min(page * PAGE_SIZE, rows.length)}`} · tandai lalu:
+            {pages > 1 && ` · menampilkan ${(page - 1) * PAGE_SIZE + 1}–${Math.min(page * PAGE_SIZE, rows.length)}`}
+            {" — centang lembaga di tabel untuk kirim massal:"}
           </span>
           <Button type="submit" formAction={bulkReminderAction} size="sm" variant="outline">
             Kirim reminder
@@ -179,7 +199,7 @@ export default async function AdminDashboardPage({
             Kirim ulang aktivasi
           </Button>
           <a href={`/admin/dashboard/ekspor${query({ ...(status && { status }), ...(flag && { flag: "1" }) })}`} className={buttonVariants({ size: "sm", variant: "outline" })}>
-            <IconOnly label="Ekspor daftar (CSV)" text="Ekspor daftar (CSV)" />
+            Ekspor CSV
           </a>
         </div>
         {groups.map((district) => (

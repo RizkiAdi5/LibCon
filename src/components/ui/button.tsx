@@ -49,21 +49,17 @@ function Button({
   ...props
 }: ButtonPrimitive.Props & VariantProps<typeof buttonVariants>) {
   // ikon aksi otomatis dari kata kerja di awal label ("Simpan", "Hapus", …) — lihat action-icon.tsx.
-  // Ada ikon → tombol ikon saja: teks jadi tooltip + sr-only (nama aksesibel tetap sama).
+  // Ikon tampil sebagai dekorasi DI SAMPING teks (bukan pengganti teks) — teks tetap harus
+  // terbaca supaya aksinya jelas tanpa harus menebak dari ikon (feedback user 2026-11-23).
   const parts = Children.toArray(children as ReactNode)
   const text = parts.every((p) => typeof p === "string" || typeof p === "number") ? parts.join("") : null
-  const iconOnly = text !== null && actionIconFor(text) !== null
+  const icon = text !== null ? actionIconFor(text) : null
   return (
-    <ButtonPrimitive
-      data-slot="button"
-      title={iconOnly ? text : undefined}
-      className={cn(buttonVariants({ variant, size, className }), iconOnly && "aspect-square px-0")}
-      {...props}
-    >
-      {iconOnly ? (
+    <ButtonPrimitive data-slot="button" className={cn(buttonVariants({ variant, size, className }))} {...props}>
+      {icon ? (
         <>
-          <ActionIcon label={text} />
-          <span className="sr-only">{text}</span>
+          <ActionIcon label={text!} />
+          {text}
         </>
       ) : (
         (children as ReactNode)
