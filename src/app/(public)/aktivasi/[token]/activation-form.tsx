@@ -2,7 +2,7 @@
 
 import { useActionState, useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { PasswordInput } from "@/components/ui/password-input";
 import { Label } from "@/components/ui/label";
 import { PasswordRules } from "@/components/password-rules";
 import { checkPasswordPolicy } from "@/lib/auth/passwordPolicy";
@@ -21,10 +21,9 @@ export function ActivationForm({ token, policy }: { token: string; policy: Passw
       <input type="hidden" name="token" value={token} />
       <div className="space-y-2">
         <Label htmlFor="password">Password baru</Label>
-        <Input
+        <PasswordInput
           id="password"
           name="password"
-          type="password"
           autoComplete="new-password"
           value={password}
           onChange={(e) => setPassword(e.target.value)}
@@ -33,13 +32,7 @@ export function ActivationForm({ token, policy }: { token: string; policy: Passw
       </div>
       <div className="space-y-2">
         <Label htmlFor="passwordConfirmation">Konfirmasi password</Label>
-        <Input
-          id="passwordConfirmation"
-          name="passwordConfirmation"
-          type="password"
-          autoComplete="new-password"
-          required
-        />
+        <PasswordInput id="passwordConfirmation" name="passwordConfirmation" autoComplete="new-password" required />
       </div>
       <PasswordRules failedRules={check.failedRules} />
       {state.error && (

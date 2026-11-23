@@ -2,7 +2,7 @@
 
 import { useActionState, useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { PasswordInput } from "@/components/ui/password-input";
 import { Label } from "@/components/ui/label";
 import { PasswordRules } from "@/components/password-rules";
 import { checkPasswordPolicy } from "@/lib/auth/passwordPolicy";
@@ -28,14 +28,13 @@ export function ChangePasswordForm({
     <form action={formAction} className="max-w-sm space-y-4">
       <div className="space-y-2">
         <Label htmlFor="oldPassword">Password lama</Label>
-        <Input id="oldPassword" name="oldPassword" type="password" autoComplete="current-password" required />
+        <PasswordInput id="oldPassword" name="oldPassword" autoComplete="current-password" required />
       </div>
       <div className="space-y-2">
         <Label htmlFor="password">Password baru</Label>
-        <Input
+        <PasswordInput
           id="password"
           name="password"
-          type="password"
           autoComplete="new-password"
           value={password}
           onChange={(e) => setPassword(e.target.value)}
@@ -44,7 +43,7 @@ export function ChangePasswordForm({
       </div>
       <div className="space-y-2">
         <Label htmlFor="passwordConfirmation">Konfirmasi password baru</Label>
-        <Input id="passwordConfirmation" name="passwordConfirmation" type="password" autoComplete="new-password" required />
+        <PasswordInput id="passwordConfirmation" name="passwordConfirmation" autoComplete="new-password" required />
       </div>
       <PasswordRules failedRules={check.failedRules} />
       {state.error && (
