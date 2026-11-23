@@ -11,6 +11,8 @@ export default async function AdminLayout({ children }: { children: ReactNode })
   const pendingRequests =
     (await prisma.accountRequest.count({ where: { status: "PENDING" } })) +
     (await prisma.institutionChangeRequest.count({ where: { status: "PENDING", changes: { path: ["type"], equals: DISABLE_SECOND_ACCOUNT } } }));
+  // Pendaftaran mandiri lembaga — di luar PRD, fitur percobaan (lihat CLAUDE.md)
+  const pendingRegistrations = await prisma.institutionRegistrationRequest.count({ where: { status: "PENDING" } });
 
   const groups: NavGroup[] = [
     [
@@ -24,6 +26,7 @@ export default async function AdminLayout({ children }: { children: ReactNode })
     ],
     [
       { href: "/admin/peserta", label: "Peserta", icon: "Building2" },
+      { href: "/admin/pendaftaran", label: "Pendaftaran Lembaga", icon: "FilePlus2", badge: pendingRegistrations },
       { href: "/admin/permintaan-akun", label: "Permintaan Akun", icon: "UserPlus", badge: pendingRequests },
     ],
     // Pengaturan & Log Aktivitas khusus Super Admin (halaman tetap dijaga requireRole sendiri)

@@ -35,6 +35,12 @@ export function LoginForm() {
       <Button type="submit" className="w-full" disabled={pending}>
         {pending ? "Memproses..." : "Masuk"}
       </Button>
+      <p className="text-center text-sm text-muted-foreground">
+        Lembaga belum terdaftar?{" "}
+        <a href="/daftar" className="font-medium text-foreground hover:underline">
+          Daftarkan lembaga
+        </a>
+      </p>
     </form>
   );
 }

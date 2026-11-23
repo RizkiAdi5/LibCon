@@ -303,6 +303,7 @@ model InstitutionType {
   institutions             Institution[]
   questionInstitutionTypes QuestionInstitutionType[]
   scoreNodeTypeOverrides   ScoreNodeTypeOverride[]
+  registrationRequests     InstitutionRegistrationRequest[]
 
   @@map("institution_types")
 }
@@ -331,16 +332,17 @@ model Institution {
   deletedAt          DateTime? @map("deleted_at")
   deletedBy          String?   @map("deleted_by") @db.Uuid
 
-  type             InstitutionType            @relation(fields: [typeId], references: [id])
-  region           Region?                    @relation(fields: [regionId], references: [id])
-  users            User[]
-  visitorReports   VisitorReport[]
-  changeRequests   InstitutionChangeRequest[]
-  accountRequests  AccountRequest[]
-  submissions      Submission[]
-  periodExtensions PeriodExtension[]
-  emailLogs        EmailLog[]
-  importJobRows    ImportJobRow[]
+  type                InstitutionType                 @relation(fields: [typeId], references: [id])
+  region              Region?                         @relation(fields: [regionId], references: [id])
+  users               User[]
+  visitorReports      VisitorReport[]
+  changeRequests      InstitutionChangeRequest[]
+  accountRequests     AccountRequest[]
+  registrationRequest InstitutionRegistrationRequest? @relation("RegistrationRequestCreatedInstitution")
+  submissions         Submission[]
+  periodExtensions    PeriodExtension[]
+  emailLogs           EmailLog[]
+  importJobRows       ImportJobRow[]
 
   @@index([regionId, typeId])
   @@map("institutions")
@@ -425,22 +427,23 @@ model User {
   loginAttempts LoginAttempt[]
 
   // relasi aktor bisnis (bukan kolom tracking generik — lihat header file)
-  institutionChangeRequestsRequested InstitutionChangeRequest[] @relation("InstitutionChangeRequestedBy")
-  institutionChangeRequestsReviewed  InstitutionChangeRequest[] @relation("InstitutionChangeReviewedBy")
-  accountRequestsRequested           AccountRequest[]           @relation("AccountRequestRequestedBy")
-  accountRequestsReviewed            AccountRequest[]           @relation("AccountRequestReviewedBy")
-  accountRequestCreatedFor           AccountRequest?            @relation("AccountRequestCreatedUser")
+  institutionChangeRequestsRequested InstitutionChangeRequest[]       @relation("InstitutionChangeRequestedBy")
+  institutionChangeRequestsReviewed  InstitutionChangeRequest[]       @relation("InstitutionChangeReviewedBy")
+  accountRequestsRequested           AccountRequest[]                 @relation("AccountRequestRequestedBy")
+  accountRequestsReviewed            AccountRequest[]                 @relation("AccountRequestReviewedBy")
+  accountRequestCreatedFor           AccountRequest?                  @relation("AccountRequestCreatedUser")
+  registrationRequestsReviewed       InstitutionRegistrationRequest[] @relation("RegistrationRequestReviewedBy")
   savedReportFilters                 SavedReportFilter[]
-  submissionsLastSubmitted           Submission[]               @relation("SubmissionLastSubmittedBy")
-  submissionsVerified                Submission[]               @relation("SubmissionVerifiedBy")
+  submissionsLastSubmitted           Submission[]                     @relation("SubmissionLastSubmittedBy")
+  submissionsVerified                Submission[]                     @relation("SubmissionVerifiedBy")
   answersUpdated                     Answer[]
   submissionSnapshotsSubmitted       SubmissionSnapshot[]
   validationResultsReviewed          ValidationResult[]
   revisionRequestsRequested          RevisionRequest[]
   evidenceFilesUploaded              EvidenceFile[]
   questionnairesPublished            Questionnaire[]
-  surveyPeriodsScoresPublished       SurveyPeriod[]             @relation("SurveyPeriodScoresPublishedBy")
-  surveyPeriodsScoresUnpublished     SurveyPeriod[]             @relation("SurveyPeriodScoresUnpublishedBy")
+  surveyPeriodsScoresPublished       SurveyPeriod[]                   @relation("SurveyPeriodScoresPublishedBy")
+  surveyPeriodsScoresUnpublished     SurveyPeriod[]                   @relation("SurveyPeriodScoresUnpublishedBy")
   scoreRunsTriggered                 ScoreRun[]
   emailLogsReceived                  EmailLog[]
 
@@ -524,6 +527,37 @@ model AccountRequest {
   createdUser User?       @relation("AccountRequestCreatedUser", fields: [createdUserId], references: [id])
 
   @@map("account_requests")
+}
+
+/**
+ * Di luar PRD/ERD — fitur "pendaftaran mandiri lembaga" (permintaan user,
+ * belum tentu dipertahankan). Lembaga BELUM dibuat sampai admin menyetujui;
+ * kalau disetujui, createdInstitutionId diisi (dibuat lewat jalur yang sama
+ * dengan createParticipantAccountAction). Tidak ada email penolakan (pendaftar
+ * belum punya akun) — admin follow-up manual.
+ */
+model InstitutionRegistrationRequest {
+  id                   String        @id @default(uuid()) @db.Uuid
+  institutionName      String        @map("institution_name")
+  typeId               String        @map("type_id") @db.Uuid
+  officialEmail        String        @map("official_email")
+  picName              String        @map("pic_name")
+  whatsapp             String?
+  status               RequestStatus @default(PENDING)
+  reviewedById         String?       @map("reviewed_by") @db.Uuid
+  reviewedAt           DateTime?     @map("reviewed_at")
+  rejectReason         String?       @map("reject_reason")
+  createdInstitutionId String?       @unique @map("created_institution_id") @db.Uuid
+  createdAt            DateTime      @default(now()) @map("created_at")
+  createdBy            String        @map("created_by") @db.Uuid
+  updatedAt            DateTime      @updatedAt @map("updated_at")
+  updatedBy            String?       @map("updated_by") @db.Uuid
+
+  type               InstitutionType @relation(fields: [typeId], references: [id])
+  reviewedBy         User?           @relation("RegistrationRequestReviewedBy", fields: [reviewedById], references: [id])
+  createdInstitution Institution?    @relation("RegistrationRequestCreatedInstitution", fields: [createdInstitutionId], references: [id])
+
+  @@map("institution_registration_requests")
 }
 
 // =========================================================================

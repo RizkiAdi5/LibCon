@@ -10,6 +10,7 @@ import {
   CalendarRange,
   ClipboardCheck,
   ClipboardList,
+  FilePlus2,
   History,
   Home,
   LayoutDashboard,
@@ -21,7 +22,7 @@ import {
 import { cn } from "@/lib/utils";
 
 // ikon dipetakan di klien: komponen tidak bisa dikirim dari server component sebagai prop
-const ICONS = { Award, BarChart3, Building2, Calculator, CalendarRange, ClipboardCheck, ClipboardList, History, Home, LayoutDashboard, Settings, UserCircle, UserPlus, Users };
+const ICONS = { Award, BarChart3, Building2, Calculator, CalendarRange, ClipboardCheck, ClipboardList, FilePlus2, History, Home, LayoutDashboard, Settings, UserCircle, UserPlus, Users };
 export type IconName = keyof typeof ICONS;
 export type NavItem = { href: string; label: string; icon: IconName; badge?: number };
 export type NavGroup = NavItem[];
