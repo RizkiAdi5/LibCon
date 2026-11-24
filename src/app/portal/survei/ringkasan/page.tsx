@@ -20,9 +20,6 @@ export default async function RingkasanPage({ searchParams }: { searchParams: Pr
 
   return (
     <div className="max-w-3xl space-y-6">
-      <Link href="/portal/survei" className="text-sm underline">
-        ← Kembali ke survei
-      </Link>
       <h1 className="text-xl font-semibold">Ringkasan jawaban</h1>
       {terkirim && sent && (
         <p role="status" className="rounded-md border border-green-600/50 p-3 text-sm text-green-700">

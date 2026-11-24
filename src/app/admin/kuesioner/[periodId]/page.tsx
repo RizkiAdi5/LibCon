@@ -70,9 +70,6 @@ export default async function BuilderPage({
 
   return (
     <div className="space-y-6">
-      <Link href="/admin/kuesioner" className="text-sm underline">
-        ← Daftar kuesioner
-      </Link>
       <div>
         <h1 className="text-xl font-semibold">{questionnaire.title}</h1>
         <p className="text-sm">

@@ -84,7 +84,7 @@ export function RulesPanel({
   });
 
   return (
-    <section className="max-w-3xl space-y-4">
+    <section className="mx-auto max-w-3xl space-y-4">
       <h2 className="font-semibold">Aturan validasi</h2>
       {rules.length === 0 && <p className="text-sm text-muted-foreground">Belum ada aturan.</p>}
       <ul className="space-y-2 text-sm">
@@ -123,7 +123,7 @@ export function RulesPanel({
       </ul>
 
       {(!published || editingId) && (
-        <form action={formAction} className="space-y-3 rounded-md border p-4">
+        <form action={formAction} className="box space-y-3 p-4">
           <input type="hidden" name="periodId" value={periodId} />
           <input type="hidden" name="questionId" value={question.id} />
           {editingId && <input type="hidden" name="ruleId" value={editingId} />}

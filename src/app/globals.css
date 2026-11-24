@@ -207,3 +207,15 @@
 .app-panel td a.underline:hover {
   color: var(--brand);
 }
+
+/* select native: panah OS bawaan nempel ke tepi karena tiap halaman cuma set px-2 sendiri-sendiri
+   (50+ tempat) tanpa ruang untuk panah. Ganti dengan panah custom + padding kanan tetap —
+   !important di luar @layer supaya mengalahkan utilitas px-2/pr-* di className masing-masing. */
+select {
+  appearance: none !important;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='%2371717a' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E") !important;
+  background-repeat: no-repeat !important;
+  background-position: right 0.55rem center !important;
+  background-size: 0.9rem !important;
+  padding-right: 2rem !important;
+}

@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { notFound } from "next/navigation";
 import { z } from "zod";
 import { prisma } from "@/lib/db/client";
@@ -67,9 +66,6 @@ export default async function DetailPesertaPage({
 
   return (
     <div className="space-y-6">
-      <Link href="/admin/peserta" className="text-sm underline">
-        ← Daftar peserta
-      </Link>
       <div>
         <h1 className="text-xl font-semibold">{institution.libraryName}</h1>
         <p className={isInactive ? "text-sm text-destructive" : "text-sm text-green-700"}>

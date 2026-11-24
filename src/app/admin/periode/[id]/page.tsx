@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { notFound } from "next/navigation";
 import { z } from "zod";
 import { prisma } from "@/lib/db/client";
@@ -49,9 +48,6 @@ export default async function DetailPeriodePage({
 
   return (
     <div className="space-y-8">
-      <Link href="/admin/periode" className="text-sm underline">
-        ← Daftar periode
-      </Link>
       <div>
         <h1 className="text-xl font-semibold">{period.name}</h1>
         <p className="text-sm">

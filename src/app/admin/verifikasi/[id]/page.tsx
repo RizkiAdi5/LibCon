@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { notFound } from "next/navigation";
 import { z } from "zod";
 import { withDb } from "@/lib/db/withDb";
@@ -63,9 +62,6 @@ export default async function DetailKirimanPage({
 
   return (
     <div className="max-w-5xl space-y-6">
-      <Link href={`/admin/verifikasi?periode=${submission.periodId}`} className="text-sm underline">
-        ← Daftar kiriman
-      </Link>
       <div>
         <h1 className="text-xl font-semibold">{submission.institution.libraryName}</h1>
         <p className="text-sm">

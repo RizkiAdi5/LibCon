@@ -111,9 +111,6 @@ export default async function SkemaPage({ params, searchParams }: { params: Prom
 
   return (
     <div className="max-w-5xl space-y-6">
-      <Link href="/admin/skoring" className="text-sm underline">
-        ← Daftar skema
-      </Link>
       <div>
         <h1 className="text-xl font-semibold">
           {scheme.name} v{scheme.version}

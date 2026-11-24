@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { notFound } from "next/navigation";
 import { z } from "zod";
 import { prisma } from "@/lib/db/client";
@@ -59,33 +58,34 @@ export default async function UbahSoalPage({
 
   return (
     <div className="space-y-8">
-      <Link href={`/admin/kuesioner/${periodId}`} className="text-sm underline">
-        ← Builder kuesioner
-      </Link>
-      <h1 className="text-xl font-semibold">
-        Soal <code>{question.code}</code>
-      </h1>
       <FlashMessage ok={ok} error={error} />
-      <QuestionForm
-        periodId={periodId}
-        questionId={question.id}
-        sections={questionnaire.sections}
-        institutionTypes={institutionTypes}
-        takenCodes={questionnaire.questions.filter((q) => q.id !== question.id).map((q) => q.code)}
-        published={published}
-        initial={{
-          sectionId: question.sectionId,
-          label: question.label,
-          code: question.code,
-          helpText: question.helpText ?? "",
-          type: question.type as BuilderQuestionType,
-          isRequired: question.isRequired,
-          hasEvidenceUrl: question.hasEvidenceUrl,
-          institutionTypeIds: question.institutionTypes.map((t) => t.institutionTypeId),
-          options: question.options.map((o) => ({ label: o.label, scoreValue: o.scoreValue === null ? null : Number(o.scoreValue) })),
-          config: (question.config ?? {}) as QuestionConfig,
-        }}
-      />
+      <div className="flex justify-center">
+        <div className="w-full max-w-3xl space-y-4">
+          <h1 className="text-xl font-semibold">
+            Soal <code>{question.code}</code>
+          </h1>
+          <QuestionForm
+            periodId={periodId}
+            questionId={question.id}
+            sections={questionnaire.sections}
+            institutionTypes={institutionTypes}
+            takenCodes={questionnaire.questions.filter((q) => q.id !== question.id).map((q) => q.code)}
+            published={published}
+            initial={{
+              sectionId: question.sectionId,
+              label: question.label,
+              code: question.code,
+              helpText: question.helpText ?? "",
+              type: question.type as BuilderQuestionType,
+              isRequired: question.isRequired,
+              hasEvidenceUrl: question.hasEvidenceUrl,
+              institutionTypeIds: question.institutionTypes.map((t) => t.institutionTypeId),
+              options: question.options.map((o) => ({ label: o.label, scoreValue: o.scoreValue === null ? null : Number(o.scoreValue) })),
+              config: (question.config ?? {}) as QuestionConfig,
+            }}
+          />
+        </div>
+      </div>
 
       <RulesPanel
         periodId={periodId}
@@ -102,7 +102,7 @@ export default async function UbahSoalPage({
         }))}
       />
 
-      <section className="max-w-3xl space-y-3">
+      <section className="mx-auto max-w-3xl space-y-3">
         <h2 className="font-semibold">Logika tampil</h2>
         <p className="text-sm text-muted-foreground">Tanpa kondisi Tampil, soal selalu tampil. Beberapa kondisi Tampil harus terpenuhi semua.</p>
         <ul className="space-y-2 text-sm">

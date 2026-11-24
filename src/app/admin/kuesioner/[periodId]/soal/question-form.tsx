@@ -101,7 +101,7 @@ export function QuestionForm({
   const setColumns = (next: TableColumn[]) => setConfig({ columns: next });
 
   return (
-    <form action={formAction} className="max-w-3xl space-y-4">
+    <form action={formAction} className="box space-y-4 p-5">
       <input type="hidden" name="periodId" value={periodId} />
       {questionId && <input type="hidden" name="questionId" value={questionId} />}
       <input type="hidden" name="payload" value={JSON.stringify(q)} />
